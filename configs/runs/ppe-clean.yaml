@@ -1,0 +1,40 @@
+# Эталон: сотрудник в каске, проверка пройдена с первого раза.
+#
+# Базовая линия демонстрации — показывает нормальный ход без нарушений
+# и служит точкой отсчёта для замера задержки.
+
+id: ppe-clean
+title: Проверка пройдена
+scenario: ppe-01
+description: >-
+  Сотрудник направляет камеру на себя, каска надета, проверка проходит
+  с первого предъявления, следует доклад о готовности.
+duration_sec: 20
+
+noise:
+  confidence_mean: 0.90
+  confidence_jitter: 0.05
+  flicker_prob: 0.02
+  unclear_prob: 0.01
+
+timeline:
+  - at: 1
+    note: Сотрудник снял нагрудную камеру и направил её на себя
+
+  - at: 3
+    note: В кадре сотрудник в защитной каске
+    set:
+      helmet: "on"
+    transition_sec: 1.0
+
+  - at: 11
+    note: Камера надета обратно, доклад о готовности
+    voice: ready_report
+
+expected:
+  - step: helmet_check
+    kind: MATCH
+    reason: step_completed
+  - step: ready_report
+    kind: MATCH
+    reason: step_completed

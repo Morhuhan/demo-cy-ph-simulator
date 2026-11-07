@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "StateQuality": {
+      "enum": [
+        "confirmed",
+        "unclear",
+        "stale"
+      ],
+      "title": "StateQuality",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Подтверждённая смена состояния — выход сглаживания.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "description": "Версия контракта. Мажорная часть — признак совместимости.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Уникальный идентификатор сообщения",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "ts": {
+      "description": "Момент формирования сообщения, UTC",
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "variable": {
+      "title": "Variable",
+      "type": "string"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "None при quality != confirmed",
+      "title": "Value"
+    },
+    "previous_value": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Что было до перехода",
+      "title": "Previous Value"
+    },
+    "quality": {
+      "$ref": "#/$defs/StateQuality"
+    },
+    "confidence": {
+      "description": "Средневзвешенная уверенность по окну подтверждения",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "agreement": {
+      "description": "Доля наблюдений в окне, согласных с принятым значением",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Agreement",
+      "type": "number"
+    },
+    "first_seen_ts": {
+      "description": "frame_ts первого наблюдения, поддержавшего этот переход",
+      "format": "date-time",
+      "title": "First Seen Ts",
+      "type": "string"
+    },
+    "confirmed_ts": {
+      "description": "Момент, когда сглаживание признало состояние устоявшимся. Задержка сглаживания = confirmed_ts - first_seen_ts.",
+      "format": "date-time",
+      "title": "Confirmed Ts",
+      "type": "string"
+    },
+    "observations": {
+      "description": "Сколько наблюдений вошло в окно",
+      "minimum": 0,
+      "title": "Observations",
+      "type": "integer"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "camera_id": {
+      "title": "Camera Id",
+      "type": "string"
+    },
+    "post_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Post Id"
+    }
+  },
+  "required": [
+    "variable",
+    "value",
+    "quality",
+    "confidence",
+    "agreement",
+    "first_seen_ts",
+    "confirmed_ts",
+    "observations",
+    "source",
+    "camera_id"
+  ],
+  "title": "state-change",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

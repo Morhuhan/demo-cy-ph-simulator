@@ -1,0 +1,50 @@
+# Конфигурация модуля распознавания для локального запуска на этой машине.
+#
+# Повторяет demo-kit\cv\config.yaml, отличия: источник — вебкамера, модель
+# берётся из корня проекта, кадр с рамками отдаётся в страницу стенда.
+
+camera:
+  id: hmd-01
+  source: 0
+  target_inference_fps: 12
+
+model:
+  path: C:/Users/radio/Projects/demo-cy-ph-simulator/yolo11m_safety.pt
+  imgsz: 640
+  confidence: 0.50
+  device: 0
+  version: ppe-yolo11m-v1
+
+helmet:
+  positive_class: hat
+  negative_class: nohat
+  head_region_ratio: 0.45
+  temporal_window: 10
+  confirm_ratio: 0.70
+  min_valid_observations: 5
+  min_confidence: 0.50
+
+tracking:
+  min_iou: 0.30
+  max_missed_frames: 15
+
+stream:
+  no_data_timeout_sec: 2.0
+  reconnect_interval_sec: 2.0
+  heartbeat_interval_sec: 1.0
+
+transport:
+  type: websocket
+  url: ws://127.0.0.1:8080/cv?stand=demo
+
+preview:
+  enabled: true
+  host: 127.0.0.1
+  port: 8081
+
+debug:
+  draw_boxes: true
+  show_window: false
+
+logging:
+  level: INFO

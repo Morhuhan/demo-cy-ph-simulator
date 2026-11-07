@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пульт</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310131a'/%3E%3Crect x='7' y='9' width='18' height='4' rx='2' fill='%2335c46a'/%3E%3Crect x='7' y='19' width='18' height='4' rx='2' fill='%234a9eff'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #10131a; --panel: #171b24; --panel-2: #1e2330; --line: #2a3040;
+    --text: #e6e9f0; --muted: #8b93a7; --accent: #4a9eff; --ok: #35c46a;
+    --warn: #e5a13a; --crit: #ef4d4d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 14px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+  button {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 12px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.active { background: var(--accent); border-color: var(--accent); color: #08111d; }
+
+  section {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    overflow: hidden; margin-bottom: 12px;
+  }
+  section > h2 {
+    margin: 0; padding: 10px 13px; font-size: 12px; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--line);
+  }
+  section > .body { padding: 12px 13px; }
+
+  .group { margin-bottom: 13px; }
+  .group:last-child { margin-bottom: 0; }
+  .group h3 {
+    margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--muted); font-weight: 600;
+  }
+  .switches { display: flex; flex-wrap: wrap; gap: 5px; }
+  .switches button { padding: 5px 10px; font-size: 12px; }
+  .var-title { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+
+  /* --- лимит времени на шаг --- */
+  .timer { padding: 11px 13px; border-bottom: 1px solid var(--line); }
+  .timer:last-child { border-bottom: none; }
+  .timer .row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+  .timer .row .left {
+    margin-left: auto; font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted);
+  }
+  .timer .bar {
+    margin-top: 7px; height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden;
+  }
+  .timer .bar > i {
+    display: block; height: 100%; border-radius: 3px; background: var(--ok);
+    transition: width .25s linear;
+  }
+  .timer.warn .bar > i { background: var(--warn); }
+  .timer.over .bar > i { background: var(--crit); }
+  .timer.over .row .left { color: var(--crit); }
+  .timer.paused .bar > i { background: var(--muted); }
+  .timer .pause-mark { font-size: 11px; color: var(--warn); }
+  .muted { color: var(--muted); font-size: 12px; }
+
+  .ind { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+         font-size: 12px; margin-bottom: 6px; }
+  .ind:last-child { margin-bottom: 0; }
+  .ind .v {
+    font-family: ui-monospace, monospace; font-size: 11px; padding: 2px 8px;
+    border-radius: 4px; background: var(--panel-2); border: 1px solid var(--line);
+  }
+  .ind .v.set { color: var(--ok); border-color: rgba(53,196,106,.4); }
+  .ind .v.none { color: var(--warn); border-color: rgba(229,161,58,.4); }
+</style>
+</head>
+<body>
+
+<section>
+  <h2>Лимит времени</h2>
+  <div id="timers"><div class="body muted">Занятие не запущено</div></div>
+</section>
+
+<section id="manual">
+  <h2>Ручное управление</h2>
+  <div class="body">
+    <div class="group">
+      <h3>Состояния</h3>
+      <div id="switches"></div>
+    </div>
+    <div class="group">
+      <h3>Видеопоток</h3>
+      <div class="switches">
+        <button data-stream="online">Норма</button>
+        <button data-stream="lost">Обрыв</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Наблюдаемые состояния</h2>
+  <div class="body"><div id="indicators"></div></div>
+</section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let scenario = null, snapshot = null;
+//: Остаток времени, зафиксированный пока занятие шло. На паузе показываем его:
+//: срок шага сдвигается только при продолжении, и без этой отметки полоса
+//: продолжала бы ползти, пока занятие стоит.
+let frozenLeft = {};
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  if (response.status === 409) {
+    // Занятие потеряно: стенд перезапустили. Ключ выдаёт страница —
+    // достаточно перезагрузиться.
+    reloadOnce();
+    throw new Error(`${path}: занятие не найдено`);
+  }
+  if (!response.ok) throw new Error(`${path}: ${response.status}`);
+  return response.json();
+}
+
+let reloading = false;
+function reloadOnce() {
+  if (reloading) return;
+  reloading = true;
+  location.reload();
+}
+
+const post = (path, body) => api(path, {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify(body || {}),
+});
+
+/* ---------- сценарий ---------- */
+async function loadScenario() {
+  scenario = await api('/scenario');
+  document.title = `Пульт — ${scenario.scenario_code}`;
+  renderSwitches();
+  renderIndicators();
+  await renderManual();
+}
+
+async function renderManual() {
+  // Тумблеры двигают состояние эмулятора. Если источником служит реальная
+  // съёмка, двигать нечего: показываем это словами, а не мёртвыми кнопками.
+  let manual = true;
+  try { manual = (await api('/emulator/state')).enabled !== false; } catch { manual = false; }
+  $('manual').style.display = manual ? '' : 'none';
+}
+
+function renderSwitches() {
+  $('switches').innerHTML = Object.entries(scenario.observables).map(([name, meta]) => `
+    <div style="margin-bottom:8px">
+      <div class="var-title">${meta.title}</div>
+      <div class="switches">
+        ${Object.entries(meta.values).map(([value, title]) =>
+          `<button data-var="${name}" data-val="${value}">${title}</button>`).join('')}
+      </div>
+    </div>`).join('');
+
+  $('switches').querySelectorAll('button').forEach(button => {
+    button.onclick = () => post('/emulator/state', {
+      variable: button.dataset.var, value: button.dataset.val,
+    });
+  });
+  markActiveSwitches();
+}
+
+function markActiveSwitches() {
+  const observed = snapshot?.observed_state || {};
+  $('switches').querySelectorAll('button').forEach(button => {
+    button.classList.toggle('active', observed[button.dataset.var] === button.dataset.val);
+  });
+}
+
+function renderIndicators() {
+  const observed = snapshot?.observed_state || {};
+  $('indicators').innerHTML = Object.entries(scenario.observables).map(([name, meta]) => {
+    const value = observed[name];
+    const label = value ? (meta.values[value] || value) : 'не определено';
+    return `<div class="ind">
+      <span>${meta.title}</span>
+      <span class="v ${value ? 'set' : 'none'}">${label}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- лимит времени на шаг ----------
+   Полоса уменьшается до срабатывания сторожевого таймера шага. Инструктору за
+   пультом важно видеть, сколько осталось на действие: после нуля система
+   вынесет вердикт «не уложился», и переключать тумблер уже поздно. */
+function renderTimers() {
+  const live = snapshot && (snapshot.state === 'running' || snapshot.state === 'paused');
+  if (!scenario || !live) {
+    $('timers').innerHTML = '<div class="body muted">Занятие не запущено</div>';
+    frozenLeft = {};
+    return;
+  }
+
+  const paused = snapshot.state === 'paused';
+  const now = Date.now();
+  const timed = (snapshot.steps || []).filter(
+    s => s.status === 'active' && s.deadline_ts && s.started_ts);
+
+  if (!timed.length) {
+    const current = (snapshot.steps || []).find(s => s.status === 'active');
+    $('timers').innerHTML = current
+      ? `<div class="body"><div>${current.title}</div>
+         <div class="muted" style="margin-top:4px">${
+           paused ? 'занятие на паузе' : 'без ограничения по времени'}</div></div>`
+      : '<div class="body muted">Нет текущего шага</div>';
+    return;
+  }
+
+  $('timers').innerHTML = timed.map(step => {
+    const started = new Date(step.started_ts).getTime();
+    const deadline = new Date(step.deadline_ts).getTime();
+    const total = Math.max(1, deadline - started);
+
+    let left;
+    if (paused && frozenLeft[step.id] !== undefined) {
+      left = frozenLeft[step.id];
+    } else {
+      left = deadline - now;
+      frozenLeft[step.id] = left;
+    }
+
+    const share = Math.max(0, Math.min(1, left / total));
+    const seconds = Math.max(0, Math.ceil(left / 1000));
+    const cls = [paused ? 'paused' : '', left <= 0 ? 'over' : (share < 0.34 ? 'warn' : '')]
+      .filter(Boolean).join(' ');
+    return `<div class="timer ${cls}">
+      <div class="row">
+        <span>${step.title}</span>
+        ${paused ? '<span class="pause-mark">пауза</span>' : ''}
+        <span class="left">${left <= 0 ? 'время вышло' : seconds + ' с'}</span>
+      </div>
+      <div class="bar"><i style="width:${share * 100}%"></i></div>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- подключение ---------- */
+function onSnapshot(s) {
+  const changed = snapshot?.sop_id !== s.sop_id;
+  snapshot = s;
+  if (changed) { loadScenario(); return; }
+  markActiveSwitches();
+  renderIndicators();
+  renderTimers();
+}
+
+function connect() {
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  const socket = new WebSocket(`${protocol}://${location.host}/ws`);
+  socket.onmessage = (message) => {
+    const {type, payload} = JSON.parse(message.data);
+    if (type === 'snapshot') onSnapshot(payload);
+  };
+  socket.onclose = () => setTimeout(connect, 1500);
+}
+
+document.querySelectorAll('[data-stream]').forEach(button => {
+  button.onclick = () => post('/emulator/stream', {
+    state: button.dataset.stream,
+    reason: button.dataset.stream === 'lost' ? 'обрыв соединения с нагрудной камерой' : null,
+  });
+});
+
+(async () => {
+  await loadScenario();
+  connect();
+  // Полоса должна ползти между снимками: движок присылает их по событиям,
+  // а не каждую секунду.
+  setInterval(renderTimers, 250);
+})();
+</script>
+</body>
+</html>

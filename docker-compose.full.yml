@@ -1,0 +1,60 @@
+# Стенд и модуль распознавания вместе — для Linux с камерой и видеокартой.
+#
+#     docker compose -f docker-compose.full.yml up --build -d
+#     открыть http://localhost:8080/check
+#
+# Нужны NVIDIA Container Toolkit и камера на /dev/video0. Стенд описан в
+# docker-compose.stand.yml и подключается отсюда целиком; здесь — только
+# модуль распознавания.
+#
+# Под Windows и macOS этот файл не годится: Docker там не пробрасывает
+# камеру в контейнер. Там стенд — docker-compose.stand.yml, а модуль
+# запускается на машине.
+#
+# Подробно — docs/stand-docker.md.
+
+name: kft-stand
+
+include:
+  - docker-compose.stand.yml
+
+services:
+  cv:
+    build: ./cv-module
+    image: kft01-cv:latest
+    # Источник: 0 — камера, проброшенная ниже; /videos/<файл> — ролик из
+    # папки videos рядом с этим файлом; rtsp://… — сетевая камера.
+    command:
+      - python
+      - app.py
+      - --config
+      - /app/config.docker.yaml
+      - --source
+      - ${CV_SOURCE:-0}
+      - --no-window
+      - --preview-port
+      - "8081"
+    environment:
+      TZ: Europe/Moscow
+    devices:
+      # Камера хоста становится /dev/video0 в контейнере. Другая камера —
+      # CV_CAMERA=/dev/video2 в .env. Без камеры (ролик, RTSP) строку убрать:
+      # с несуществующим устройством контейнер не запустится.
+      - ${CV_CAMERA:-/dev/video0}:/dev/video0
+    volumes:
+      - ./docker/cv-config.yaml:/app/config.docker.yaml:ro
+      - ./cv-module/models:/app/models:ro
+      - ./videos:/videos:ro
+    ports:
+      - "127.0.0.1:8081:8081"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    depends_on:
+      stand:
+        condition: service_healthy
+    restart: unless-stopped

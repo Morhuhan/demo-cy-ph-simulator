@@ -1,0 +1,1611 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mentrica — тренажёр</title>
+<link rel="icon" href="logo-mark.svg">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+<style>
+:root {
+  --bg: #0d1114;
+  --panel: #161c21;
+  --panel-2: #1d252c;
+  --line: #2a343d;
+  --text: #e8eef2;
+  --muted: #8a99a5;
+  --accent: #19b5ad;
+  --ok: #2ecc71;
+  --bad: #ff4d4f;
+  --warn: #ffb020;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #000; color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; overflow: hidden; }
+
+/* Сцена 1920×1080 вписывается в окно целиком. */
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background: var(--bg);
+  transform-origin: 0 0; }
+
+/* Логотип: знак — logo-mark.svg, подпись текстом, чтобы читалась на тёмном фоне. */
+.logo { display: flex; align-items: center; gap: 12px; flex: none; }
+.logo img { width: 54px; height: 54px; }
+.logo b { display: block; font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: .01em; color: var(--text); }
+.logo span { display: block; font-size: 15px; font-weight: 700; color: #ef5a3c; margin-top: 3px; }
+
+header { position: absolute; left: 24px; right: 24px; top: 16px; height: 60px; display: flex;
+  align-items: center; gap: 24px; }
+header .title { font-size: 22px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-left: 24px; border-left: 1px solid var(--line); min-width: 0; }
+header .spacer { flex: 1; }
+/* Текущий режим; выбирает его инструктор на пульте. */
+.modeline { font-size: 16px; color: var(--text); font-weight: 600; white-space: nowrap; }
+.modeline::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); margin-right: 8px; vertical-align: 2px; }
+header .progress { display: flex; gap: 6px; }
+header .progress i { width: 46px; height: 8px; border-radius: 4px; background: var(--line); }
+header .progress i.done { background: var(--ok); }
+header .progress i.cur { background: var(--accent); }
+header .clock { font-variant-numeric: tabular-nums; font-size: 22px; color: var(--muted); min-width: 70px; text-align: right; }
+
+/* Левая колонка: 3D-сцена и вопрос */
+#left { position: absolute; left: 24px; top: 88px; width: 1228px; bottom: 24px; }
+#sceneBox { position: relative; width: 1228px; height: 723px; overflow: hidden; border-radius: 10px;
+  background: #000; border: 1px solid var(--line); }
+#scene3d { position: absolute; inset: 0; }
+#scene3d canvas { display: block; width: 100% !important; height: 100% !important; }
+#sceneLabel { position: absolute; left: 16px; top: 14px; padding: 8px 14px; border-radius: 6px;
+  background: rgba(13,17,20,.82); font-size: 18px; }
+#sceneLabel small { display: block; color: var(--muted); font-size: 13px; margin-bottom: 2px; letter-spacing: .08em; }
+#sceneLabel small:empty { display: none; }
+#flash { position: absolute; left: 0; right: 0; top: 0; height: 30%; display: flex; align-items: center; justify-content: center;
+  pointer-events: none; opacity: 0; transition: opacity .25s; }
+#flash.show { opacity: 1; }
+#flash div { padding: 22px 40px; border-radius: 10px; font-size: 34px; font-weight: 700; letter-spacing: .04em;
+  text-align: center; background: rgba(0,0,0,.78); }
+#flash.ok div { color: var(--ok); border: 2px solid var(--ok); }
+#flash.bad div { color: var(--bad); border: 2px solid var(--bad); }
+#flash.bad div { box-shadow: 0 0 40px rgba(255,77,79,.35); }
+#flash div small { display: block; font-size: 18px; font-weight: 500; color: var(--text); margin-top: 8px; letter-spacing: 0; }
+
+#question { margin-top: 16px; height: 228px; }
+#question h2 { margin: 0 0 14px; font-size: 26px; font-weight: 600; }
+#options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.opt { position: relative; min-height: 120px; padding: 18px 20px 18px 74px; border-radius: 10px; cursor: pointer;
+  background: var(--panel); border: 2px solid var(--line); font-size: 21px; line-height: 1.3; color: var(--text);
+  text-align: left; font-family: inherit; transition: border-color .15s, background .15s; }
+.opt:hover { border-color: #3d4a55; }
+.opt b { position: absolute; left: 18px; top: 18px; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--panel-2); display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--accent); }
+.opt.ok { border-color: var(--ok); background: rgba(46,204,113,.1); }
+.opt.bad { border-color: var(--bad); background: rgba(255,77,79,.1); }
+.opt:disabled { cursor: default; }
+#question .wait { font-size: 22px; color: var(--muted); padding-top: 30px; }
+
+/* Правая колонка: камера и наставник */
+#right { position: absolute; right: 24px; top: 88px; width: 620px; bottom: 24px; display: flex; flex-direction: column; gap: 16px; }
+#cam { position: relative; height: 349px; border-radius: 10px; overflow: hidden; background: #050708; border: 1px solid var(--line); }
+#cam video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+#cam img { width: 100%; height: 100%; object-fit: contain; display: block; }
+#cam #demoVideo { position: absolute; inset: 0; transform: none; object-fit: contain; background: #050708; }
+#cam [hidden] { display: none !important; }
+#ops select { max-width: 180px; padding: 5px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--panel);
+  color: var(--muted); font: inherit; }
+#ops .src { padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); }
+#ops .src.live { color: var(--ok); border-color: rgba(46,204,113,.5); }
+#ops .src.sim { color: var(--warn); border-color: rgba(255,176,32,.5); }
+.msg.ai.think { color: var(--muted); font-style: italic; }
+#cam .nocam { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 18px; }
+#cam .frame { position: absolute; left: 30%; top: 8%; width: 40%; height: 88%; border: 3px solid var(--ok);
+  border-radius: 6px; display: none; }
+#cam .frame.off { border-color: var(--bad); }
+
+#mentor { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border-radius: 10px; border: 1px solid var(--line); }
+#mentor .head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+#mentor .head span { font-size: 15px; letter-spacing: .14em; color: var(--accent); font-weight: 700; flex: 1; }
+#mic { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--accent); background: var(--panel-2);
+  color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#mic svg { width: 26px; height: 26px; }
+#mic.on { background: var(--accent); color: #000; box-shadow: 0 0 0 8px rgba(25,181,173,.25); }
+#micLevel { width: 120px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; opacity: 0; transition: opacity .2s; }
+#micLevel.show { opacity: 1; }
+#micLevel i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .08s; }
+#mic:disabled { opacity: .35; cursor: default; }
+#heard { font-size: 15px; color: var(--muted); min-height: 20px; padding: 0 16px; margin-top: 8px; }
+#heard:empty { min-height: 0; margin: 0; }
+#chat { flex: 1; overflow-y: auto; padding: 8px 16px 12px; display: flex; flex-direction: column; gap: 10px; }
+.msg { padding: 10px 15px; border-radius: 16px; font-size: 18px; line-height: 1.4; max-width: 86%; }
+.msg.ai { align-self: flex-start; background: #212a31; border-top-left-radius: 4px; }
+.msg.ai.bad { background: #3a2225; color: #ffd6d6; }
+.msg.me { align-self: flex-end; background: #135c58; color: #eafaf8; border-top-right-radius: 4px; }
+#quick { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--line); }
+#quick button { padding: 8px 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--text); font: inherit; font-size: 15px; cursor: pointer; }
+#quick button:hover { border-color: var(--accent); }
+
+#ops { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+#ops button { padding: 6px 10px; border-radius: 5px; border: 1px solid var(--line); background: transparent;
+  color: var(--muted); font: inherit; cursor: pointer; }
+#ops button:hover { color: var(--text); border-color: var(--muted); }
+#ops button.on { color: #001; background: var(--warn); border-color: var(--warn); }
+/* Служебная строка — поверх экранов выбора, допуска и протокола: управлять нужно именно тогда. */
+#ops { position: relative; z-index: 30; flex-wrap: wrap; row-gap: 6px; }
+#ops button, #ops .src { white-space: nowrap; }
+#ops .sep { margin-left: 6px; }
+
+/* Полноэкранные слои */
+.layer { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; z-index: 10; }
+.layer.show { display: flex; }
+#splash { background: var(--bg); flex-direction: column; gap: 22px; }
+#splash .logo { gap: 22px; margin-bottom: 10px; }
+#splash .logo img { width: 112px; height: 112px; }
+#splash .logo b { font-size: 64px; }
+#splash .logo span { font-size: 28px; margin-top: 6px; }
+#splash h1 { margin: 0; font-size: 34px; font-weight: 600; }
+#splash p { margin: 0; font-size: 24px; color: var(--muted); }
+#splash .bar { width: 420px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+#splash .bar i { display: block; height: 100%; width: 30%; background: var(--accent); animation: load 1.4s infinite ease-in-out; }
+@keyframes load { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
+.big { padding: 18px 40px; font-size: 26px; border-radius: 10px; border: 0; background: var(--accent); color: #001;
+  font-weight: 700; cursor: pointer; font-family: inherit; }
+
+#gate { background: rgba(8,10,12,.86); }
+#gate .card { width: 900px; padding: 46px 56px; border-radius: 14px; background: var(--panel); border: 2px solid var(--bad); text-align: center; }
+#gate.okstate .card { border-color: var(--ok); }
+#pause { background: rgba(8,10,12,.72); }
+#pause .card { padding: 40px 72px; border-radius: 14px; background: var(--panel); border: 2px solid var(--warn); text-align: center; }
+#pause .card b { display: block; font-size: 44px; letter-spacing: .08em; color: var(--warn); }
+#pause .card p { margin: 14px 0 0; font-size: 22px; color: var(--muted); }
+#gate .row { font-size: 36px; font-weight: 700; letter-spacing: .03em; margin: 10px 0; }
+#gate .row.ok { color: var(--ok); } #gate .row.bad { color: var(--bad); }
+#gate p { font-size: 22px; color: var(--muted); margin: 24px 0 0; }
+
+#report { background: rgba(8,10,12,.94); }
+.sheet { width: 980px; padding: 48px 60px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+.sheet h1 { margin: 0 0 8px; font-size: 40px; }
+.sheet .sub { color: var(--muted); font-size: 20px; margin-bottom: 30px; }
+.sheet table { width: 100%; border-collapse: collapse; font-size: 26px; }
+.sheet td { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.sheet td:last-child { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sheet td.ok { color: var(--ok); } .sheet td.bad { color: var(--bad); }
+.sheet .foot { display: flex; justify-content: flex-end; gap: 12px; margin-top: 32px; }
+
+
+/* Вид камеры: со стороны / от первого лица */
+#viewBtn { position: absolute; right: 14px; top: 14px; padding: 9px 14px; border-radius: 6px; cursor: pointer;
+  background: rgba(13,17,20,.82); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: 16px; }
+#viewBtn:hover { border-color: var(--accent); }
+#viewBtn b { color: var(--accent); font-weight: 600; }
+#eyeHint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 7px 14px; border-radius: 6px;
+  background: rgba(13,17,20,.78); color: var(--muted); font-size: 15px; pointer-events: none; display: none; }
+#sceneBox.eye #eyeHint { display: block; }
+#sceneBox.eye::after { content: ""; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px;
+  border-radius: 50%; background: rgba(255,255,255,.55); pointer-events: none; }
+
+/* Обзор: карточки узла или этапа вместо вариантов */
+.review { display: flex; gap: 14px; align-items: stretch; height: 172px; }
+.review .card { flex: 1; padding: 16px 20px; border-radius: 10px; background: var(--panel); border: 2px solid var(--line);
+  font-size: 20px; line-height: 1.4; overflow: hidden; }
+.review .card.act { flex: 0 0 340px; border-color: var(--accent); background: rgba(25,181,173,.1); font-size: 23px; font-weight: 600; }
+.review .card small { display: block; color: var(--muted); font-size: 14px; letter-spacing: .1em; margin-bottom: 6px; font-weight: 600; }
+.review .card.act small { color: var(--accent); }
+.review .card p { margin: 0 0 6px; font-size: 17px; line-height: 1.35; }
+.review .card p b { color: var(--muted); font-weight: 600; }
+.review .nav { display: flex; flex-direction: column; gap: 10px; width: 230px; }
+.review .nav button { flex: 1; border-radius: 10px; border: 2px solid var(--line); background: var(--panel-2); color: var(--text);
+  font: inherit; font-size: 20px; cursor: pointer; }
+.review .nav button.next { border-color: var(--accent); color: var(--accent); }
+.review .nav button:disabled { opacity: .35; cursor: default; }
+
+/* Самостоятельное место (?self=1): выбор режима на экране, служебная строка скрыта (клавиша O) */
+#modes { background: var(--bg); flex-direction: column; gap: 22px; }
+#modes .logo { gap: 18px; margin-bottom: 6px; }
+#modes .logo img { width: 84px; height: 84px; }
+#modes .logo b { font-size: 48px; }
+#modes .logo span { font-size: 21px; margin-top: 5px; }
+#modes h1 { margin: 0; font-size: 34px; font-weight: 600; }
+#modes .lead { margin: 0; font-size: 24px; color: var(--muted); }
+#modes .hint { margin: 8px 0 0; font-size: 19px; color: var(--muted); }
+.mcards { display: grid; grid-template-columns: repeat(3, 440px); gap: 24px; margin-top: 10px; }
+.mcard { min-height: 300px; padding: 30px 30px 32px; border-radius: 14px; background: var(--panel); border: 2px solid var(--line);
+  color: var(--text); font-family: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 14px;
+  transition: border-color .15s, transform .15s; }
+.mcard:hover { border-color: var(--accent); transform: translateY(-3px); }
+.mcard .num { width: 56px; height: 56px; border-radius: 50%; background: var(--panel-2); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; }
+.mcard b { font-size: 36px; font-weight: 700; }
+.mcard span { font-size: 20px; line-height: 1.4; color: var(--muted); }
+.mcard .go { margin-top: auto; color: var(--accent); font-weight: 700; font-size: 21px; }
+.hbtn, #gate .back { display: none; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: transparent;
+  color: var(--muted); font: inherit; font-size: 15px; cursor: pointer; white-space: nowrap; }
+.hbtn:hover, #gate .back:hover { border-color: var(--accent); color: var(--text); }
+#gate .gbtns { display: none; justify-content: center; gap: 14px; margin-top: 30px; }
+#gate .back { font-size: 18px; padding: 12px 20px; }
+#gate .back.main { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+body.self .hbtn, body.self #gate .back { display: inline-block; }
+body.self #gate .gbtns { display: flex; }
+body.self #ops { display: none; }
+body.self.staff #ops { display: flex; }
+
+/* Пульт инструктора поверх экрана (клавиша I) */
+#pult { position: fixed; inset: 0; z-index: 100; display: none; background: rgba(0,0,0,.55); }
+#pult.show { display: block; }
+#pult.onsplash { background: transparent; }
+#pult iframe { position: absolute; right: 0; top: 0; bottom: 0; width: min(760px, 100vw); height: 100%; border: 0;
+  box-shadow: -10px 0 40px rgba(0,0,0,.6); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <header>
+    <div class="logo"><img src="logo-mark.svg" alt=""><div><b>Mentrica</b><span>ИИ-наставник</span></div></div>
+    <div class="title" id="lessonTitle">Верхний налив ЛВЖ в вагон-цистерну</div>
+    <div class="spacer"></div>
+    <button id="againBtn" class="hbtn" title="Пройти этот режим с начала">Начать заново</button>
+    <button id="homeBtn" class="hbtn" title="Вернуться к выбору режима">Сменить режим</button>
+    <div class="modeline" id="modeLine" title="Текущий режим"></div>
+    <div class="progress" id="progress"></div>
+    <div class="clock" id="clock">00:00</div>
+  </header>
+
+  <section id="left">
+    <div id="sceneBox">
+      <div id="scene3d"></div>
+      <div id="sceneLabel"><small id="stepNo">ПОДГОТОВКА</small><span id="stepTitle">Ожидание оператора</span></div>
+      <button id="viewBtn" title="Переключить вид камеры (V)">Вид: <b id="viewName">со стороны</b> ⇄</button>
+      <div id="eyeHint">Мышь — осмотреться · W A S D — шаг</div>
+      <div id="flash"><div></div></div>
+    </div>
+    <div id="question"><div class="wait" id="qwait">Наденьте каску, чтобы начать.</div></div>
+  </section>
+
+  <aside id="right">
+    <div id="cam">
+      <img id="cvVideo" alt="" hidden>
+      <video id="video" autoplay muted playsinline hidden></video>
+      <video id="demoVideo" muted loop playsinline hidden></video>
+      <div class="nocam" id="nocam">Камера не подключена</div>
+    </div>
+    <div id="mentor">
+      <div class="head">
+        <span>ИИ-НАСТАВНИК</span>
+        <div id="micLevel" title="Уровень звука микрофона"><i></i></div>
+        <button id="mic" title="Удерживайте, чтобы спросить (пробел)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+      </div>
+      <div id="heard"></div>
+      <div id="chat"></div>
+      <div id="quick"></div>
+    </div>
+    <div id="ops">
+      <button id="opPult" title="Пульт инструктора: занятие, режим, вид камеры, журнал">Пульт [I]</button>
+      <span class="sep">Заглушки:</span>
+      <button id="opDemo" title="Камера: вместо вебкамеры запись прогона CV с каской, по кругу">Запись CV [D]</button>
+      <button id="opPerson" title="Имитация: оператор в кадре или нет">Человек [P]</button>
+      <button id="opHelmet" title="Имитация: каска надета или снята">Каска [H]</button>
+      <button id="opCv" title="Вернуть распознавание с камеры">Камера CV [C]</button>
+      <button id="opAssume" title="Не проверять каску: оператор считается в каске, сценарий не блокируется">Не проверять каску [K]</button>
+      <button id="opReset" title="Прервать прохождение и начать заново">Сброс [R]</button>
+      <select id="micSelect" title="Микрофон"></select>
+      <span id="opNote"></span>
+    </div>
+  </aside>
+
+  <div class="layer show" id="splash">
+    <div class="logo"><img src="logo-mark.svg" alt=""><div><b>Mentrica</b><span>ИИ-наставник</span></div></div>
+    <h1 id="splashLesson">Верхний налив ЛВЖ в вагон-цистерну</h1>
+    <p id="splashText">Загрузка цифрового двойника эстакады…</p>
+    <div class="bar" id="splashBar"><i></i></div>
+    <button class="big" id="startBtn" style="display:none">Начать</button>
+  </div>
+
+  <div class="layer" id="pause">
+    <div class="card"><b>ПАУЗА</b><p>Занятие приостановлено инструктором</p></div>
+  </div>
+
+  <div class="layer" id="gate">
+    <div class="card">
+      <div class="row ok" id="gPerson">ОПЕРАТОР ОБНАРУЖЕН</div>
+      <div class="row bad" id="gHelmet">КАСКА: НЕ ОБНАРУЖЕНА ✕</div>
+      <div class="row bad" id="gAccess">ДОПУСК К СЦЕНАРИЮ: ЗАБЛОКИРОВАН</div>
+      <p id="gNote">Наденьте защитную каску</p>
+      <div class="gbtns">
+        <button class="back" id="gateBack">← Выбрать другой режим</button>
+        <button class="back main" id="gateNoCam">Продолжить без камеры</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Самостоятельное место (?self=1): посетитель сам выбирает режим -->
+  <div class="layer" id="modes">
+    <div class="logo"><img src="logo-mark.svg" alt=""><div><b>Mentrica</b><span>ИИ-наставник</span></div></div>
+    <h1 id="modesLesson">Верхний налив ЛВЖ в вагон-цистерну</h1>
+    <p class="lead">Выберите режим</p>
+    <div class="mcards" id="mcards"></div>
+    <p class="hint">После выбора наденьте каску и встаньте перед камерой. Вопросы наставнику — кнопкой микрофона.</p>
+  </div>
+
+  <div class="layer" id="report">
+    <div class="sheet">
+      <h1>Протокол прохождения</h1>
+      <div class="sub" id="reportSub">Верхний налив ЛВЖ · подготовка к наливу</div>
+      <table id="reportTable"></table>
+      <div class="foot">
+        <button class="big" id="repNext">Продолжить</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="pult"><iframe id="pultFrame" title="Пульт инструктора"></iframe></div>
+
+<script type="module">
+import { createScene } from './scene3d.js';
+import { MODES, MODE_ORDER, VIEWS, lessonById } from './lessons.js';
+
+// ?self=1 — самостоятельное место (выставка): посетитель сам выбирает режим,
+// пульт не нужен, служебная строка скрыта (показать — клавиша O).
+const SELF = new URLSearchParams(location.search).get('self') === '1';
+if (SELF) document.body.classList.add('self');
+
+// ---------------------------------------------------------------------------
+// Занятие и режим. Режим выбирается на самом экране или с пульта
+// (/expo/instructor); занятие — с пульта. Шаги и узлы — в lessons.js.
+//   обзор    — узлы эстакады, затем операция по этапам с анимацией, без вопросов;
+//   обучение — выбор действия на каждом этапе, подсказки и разбор ошибок;
+//   экзамен  — то же без подсказок и подсветки, итог — зачёт или незачёт.
+// ---------------------------------------------------------------------------
+const CTRL = { lesson: 'top-fill', mode: 'review', view: 'orbit' };
+try { Object.assign(CTRL, JSON.parse(localStorage.getItem('expo-ctrl') || '{}')); } catch (_) { /* приватный режим */ }
+if (!MODES[CTRL.mode]) CTRL.mode = 'review';
+let LESSON = lessonById(CTRL.lesson);
+let STEPS = LESSON.steps;
+// Обзор: сначала узлы эстакады, потом этапы операции.
+let REVIEW = [];
+function buildReview() {
+  REVIEW = [
+    ...LESSON.equipment.map((s) => ({ kind: 'part', ...s })),
+    ...STEPS.map((st, i) => ({ kind: 'op', i, title: st.title, action: st.options.find((o) => o.ok).t })),
+  ];
+}
+buildReview();
+// CTRL.mode — выбранный режим, S.mode — режим идущего прохождения: выбор на
+// пульте ложится только на следующее прохождение.
+const isReview = () => S.mode === 'review';
+const isExam = () => S.mode === 'exam';
+const stepCount = () => (isReview() ? REVIEW.length : STEPS.length);
+const modeTitle = (m = S.mode) => MODES[m].title;
+
+// ---------------------------------------------------------------------------
+// 3D-сцена: меши заказчика, собранные в three.js (scene3d.js)
+// ---------------------------------------------------------------------------
+// Для каждого шага: какой узел показан, что анимируется после верного ответа,
+// какой узел подсветить красным при ошибочном варианте.
+const SCENE = [
+  { part: 'grounding', wrong: ['hatch', null, 'boom'], async done() { await S3.anim.grounding(); S3.focus('lamp'); } },
+  { part: 'hatch', wrong: [null, null, 'pipe'], async done() { await S3.anim.hatch(); } },
+  { part: 'boom', wrong: [null, null, 'clamp'], async done() { await S3.anim.install(); S3.focus('pipe', 0x19e3d6, false); } },
+  { part: 'clamp', wrong: ['winch', null, null], async done() { await S3.anim.clamp(); } },
+  { part: 'winch', wrong: [null, null, 'clamp'], async done() { S3.focus('pipe'); await new Promise(r => setTimeout(r, 1200)); await S3.anim.bottom(); } },
+];
+
+let S3 = null;
+const sceneReady = createScene(document.getElementById('scene3d'), 'models/').then((s) => {
+  S3 = s; window.S3 = s;
+  s.setMode(CTRL.view);
+  showView();
+});
+
+// Узел шага: в обзоре и обучении подсвечен, на экзамене камера просто смотрит туда.
+function focusStep(part) {
+  if (isExam()) { S3.clear(); S3.view(part); } else S3.focus(part);
+}
+
+// ---------------------------------------------------------------------------
+// Вид камеры: со стороны или глазами оператора (V)
+// ---------------------------------------------------------------------------
+function showView() {
+  const mode = S3 ? S3.mode : CTRL.view;
+  $('viewName').textContent = VIEWS[mode].title.toLowerCase();
+  $('sceneBox').classList.toggle('eye', mode === 'eye');
+}
+function setView(mode, fromPult = false) {
+  CTRL.view = mode;
+  saveCtrl();
+  if (S3) S3.setMode(mode);
+  showView();
+  if (!fromPult) fetch('/expo/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view: mode }) }).catch(() => {});
+  sendStatus();
+}
+function saveCtrl() { try { localStorage.setItem('expo-ctrl', JSON.stringify(CTRL)); } catch (_) { /* приватный режим */ } }
+window.handleUtterance = (t) => handleUtterance(t);
+
+// ---------------------------------------------------------------------------
+// Голос. Реплики произносит браузер. Фразу оператора распознаёт Whisper
+// стенда (/voice/listen, тот же, что на /check); без токена HF на стенде —
+// распознавание браузера, если оно есть.
+// ---------------------------------------------------------------------------
+let voice = null;
+function pickVoice() {
+  const vs = speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
+  voice = vs.find(v => /natural|online/i.test(v.name)) || vs.find(v => /google/i.test(v.name)) || vs[0] || null;
+}
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+
+// Голос наставника — Silero стенда (/voice/say, голос в конфигурации). Нет
+// серверного синтеза или он отказал — голос браузера. Звук постоянных фраз
+// запрашивается заранее, ответы модели — по мере прихода.
+let lastSaid = '';
+let serverTts = false;
+const player = new Audio();
+const voiceCache = new Map();     // текст -> Promise<objectURL>
+let speechSeq = 0;
+
+function fetchVoice(text) {
+  if (!voiceCache.has(text)) {
+    const p = fetch('/voice/say', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+      .then((b) => URL.createObjectURL(b));
+    p.catch(() => voiceCache.delete(text));
+    voiceCache.set(text, p);
+  }
+  return voiceCache.get(text);
+}
+
+function browserSay(text) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ru-RU'; u.rate = 1.05;
+  if (voice) u.voice = voice;
+  speechSynthesis.speak(u);
+}
+
+function stopSpeech() {
+  speechSeq++;
+  player.pause();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+}
+
+// Длинный ответ звучит по предложениям: первое уже играет, пока синтезируются
+// следующие, — оператор не ждёт синтеза всей фразы.
+function sentences(text) {
+  const parts = text.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [text];
+  const out = [];
+  for (const p of parts.map((x) => x.trim()).filter(Boolean)) {
+    if (out.length && out[out.length - 1].length < 25) out[out.length - 1] += ' ' + p;
+    else out.push(p);
+  }
+  return out;
+}
+
+function playUrl(url) {
+  return new Promise((resolve, reject) => {
+    player.onended = resolve;
+    player.onerror = reject;
+    player.src = url;
+    player.play().catch(reject);
+  });
+}
+
+async function say(text, cls) {
+  lastSaid = text;
+  addMsg(text, 'ai' + (cls ? ' ' + cls : ''));
+  stopSpeech();
+  const seq = speechSeq;
+  let rest = text;
+  if (serverTts) {
+    const parts = sentences(text);
+    const audio = parts.map((p, i) => (i < 2 ? fetchVoice(p) : null));
+    let i = 0;
+    try {
+      for (; i < parts.length; i++) {
+        const url = await (audio[i] || fetchVoice(parts[i]));
+        if (i + 2 < parts.length && !audio[i + 2]) audio[i + 2] = fetchVoice(parts[i + 2]);
+        if (seq !== speechSeq) return;
+        await playUrl(url);
+        if (seq !== speechSeq) return;
+      }
+      return;
+    } catch (_) {
+      rest = parts.slice(i).join(' ');   // браузер договаривает то, что не прозвучало
+    }
+  }
+  if (seq === speechSeq && rest) browserSay(rest);
+}
+
+// Постоянные фразы экрана — заранее, по одной, чтобы не занимать синтез.
+async function prefetchVoice() {
+  if (!serverTts) return;
+  const fixed = ['Каска обнаружена. Допуск разрешён.', 'Требование восстановлено. Продолжаем.',
+    'Внимание. Каска больше не обнаружена. Обнаружено несоответствие требованиям СИЗ, продолжение сценария заблокировано.',
+    'Оператор вне кадра. Сценарий приостановлен — встаньте перед камерой.', 'Сначала нужно пройти допуск: наденьте каску.'];
+  for (const st of STEPS) {
+    fixed.push(st.q, st.success);
+    if (st.intro) fixed.push(st.intro);
+    st.options.forEach((o) => { if (o.err) fixed.push(o.err); });
+  }
+  for (const item of REVIEW) fixed.push(reviewSpeech(item));
+  for (const t of fixed.flatMap(sentences)) { try { await fetchVoice(t); } catch (_) { /* досинтезируется по требованию */ } }
+}
+
+function addMsg(text, cls) {
+  const chat = document.getElementById('chat');
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+
+const micBtn = document.getElementById('mic');
+const heard = document.getElementById('heard');
+const MIC_RATE = 16000;
+let serverStt = false;
+let mic = null;              // { ctx, stream, node, chunks, rate }
+let recording = false, recognizing = false;
+
+// Микрофон. Названия устройств браузер отдаёт только после разрешения на
+// доступ, поэтому список перестраивается, когда разрешение получено.
+// Порядок: выбранный вручную → системный по умолчанию → вебкамера → любой.
+// Виртуальные устройства (программа шлема Pico, Steam, VB-Cable и т. п.)
+// живут и без железа и молчат, их не берём, даже если они стоят по умолчанию.
+const VIRTUAL_MIC = /pico|virtual|виртуал|steam|oculus|quest|vb-audio|cable|voicemeeter|stereo mix|стерео ?микшер|broadcast|wo mic|droidcam|iriun/i;
+let micChosenByHand = false;
+try { micChosenByHand = !!localStorage.getItem('expo-mic'); } catch (_) { /* приватный режим */ }
+
+async function listMics() {
+  const sel = document.getElementById('micSelect');
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
+  let saved = null;
+  try { saved = localStorage.getItem('expo-mic'); } catch (_) { /* приватный режим */ }
+  sel.innerHTML = devices.map((d, i) => `<option value="${d.deviceId}">${d.label || 'микрофон ' + (i + 1)}</option>`).join('');
+  const real = devices.filter(d => !VIRTUAL_MIC.test(d.label));
+  const pick = devices.find(d => d.deviceId === saved)
+    || real.find(d => d.deviceId === 'default')
+    || real.find(d => /web ?cam|камер/i.test(d.label))
+    || real.find(d => d.deviceId !== 'communications')
+    || devices[0];
+  if (pick) sel.value = pick.deviceId;
+  return devices.some(d => d.label);
+}
+document.getElementById('micSelect').onchange = (e) => {
+  micChosenByHand = true;
+  try { localStorage.setItem('expo-mic', e.target.value); } catch (_) { /* приватный режим */ }
+  closeMic();
+};
+
+function closeMic() {
+  if (!mic) return;
+  mic.stream.getTracks().forEach(t => t.stop());
+  mic.ctx.close();
+  mic = null;
+}
+
+function micLabel() {
+  const sel = document.getElementById('micSelect');
+  return sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : 'микрофон';
+}
+
+async function openMic() {
+  const deviceId = document.getElementById('micSelect').value;
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: true, noiseSuppression: true },
+  });
+  const ctx = new AudioContext();
+  const src = ctx.createMediaStreamSource(stream);
+  const node = ctx.createScriptProcessor(4096, 1, 1);
+  const m = { ctx, stream, node, chunks: [], rate: ctx.sampleRate, level: 0 };
+  node.onaudioprocess = (e) => {
+    const data = e.inputBuffer.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) { const a = Math.abs(data[i]); if (a > peak) peak = a; }
+    m.level = peak;
+    if (recording) m.chunks.push(new Float32Array(data));
+  };
+  src.connect(node); node.connect(ctx.destination);
+  return m;
+}
+
+async function ensureMic() {
+  if (mic) return mic;
+  mic = await openMic();
+  // Разрешение получено — теперь названия известны. Если выбор был сделан
+  // вслепую и это не микрофон вебкамеры, переоткрываем на правильном.
+  const before = document.getElementById('micSelect').value;
+  await listMics().catch(() => false);
+  const after = document.getElementById('micSelect').value;
+  if (!micChosenByHand && after && after !== before) { closeMic(); mic = await openMic(); }
+  return mic;
+}
+
+// Уровень звука под кнопкой, пока идёт запись: сразу видно, слышит ли микрофон.
+function drawLevel() {
+  const bar = document.getElementById('micLevel');
+  if (bar) {
+    const v = recording && mic ? Math.min(1, mic.level * 3) : 0;
+    bar.firstElementChild.style.width = (v * 100).toFixed(0) + '%';
+    bar.classList.toggle('show', recording);
+  }
+  requestAnimationFrame(drawLevel);
+}
+requestAnimationFrame(drawLevel);
+
+function toWav(chunks, rate) {
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const merged = new Float32Array(total);
+  let off = 0;
+  for (const c of chunks) { merged.set(c, off); off += c.length; }
+  // Микрофон вебкамеры тихий, а тихую речь Whisper теряет: поднимаем фразу
+  // до общего уровня (как выравнивание громкости в call-analyzer), но не
+  // больше чем в 12 раз — иначе в паузах вылезает шум.
+  let peak = 0;
+  for (let i = 0; i < total; i++) { const a = Math.abs(merged[i]); if (a > peak) peak = a; }
+  const gain = peak > 0 ? Math.min(12, 0.7 / peak) : 1;
+  for (let i = 0; i < total; i++) merged[i] *= gain;
+  const ratio = rate / MIC_RATE, length = Math.floor(total / ratio);
+  const pcm = new Int16Array(length);
+  for (let i = 0; i < length; i++) {
+    const from = Math.floor(i * ratio), to = Math.min(total, Math.floor((i + 1) * ratio));
+    let acc = 0;
+    for (let j = from; j < to; j++) acc += merged[j];
+    pcm[i] = Math.max(-1, Math.min(1, acc / Math.max(1, to - from))) * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(buf);
+  const tag = (at, t) => { for (let i = 0; i < t.length; i++) v.setUint8(at + i, t.charCodeAt(i)); };
+  tag(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, MIC_RATE, true); v.setUint32(28, MIC_RATE * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  tag(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+// Запасной путь — распознавание самого браузера.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+if (SR) {
+  rec = new SR();
+  rec.lang = 'ru-RU'; rec.interimResults = true; rec.continuous = false;
+  let finalText = '';
+  rec.onresult = (e) => {
+    let t = '';
+    for (const r of e.results) t += r[0].transcript;
+    heard.textContent = '«' + t + '»';
+    if (e.results[e.results.length - 1].isFinal) finalText = t;
+  };
+  rec.onend = () => {
+    recording = false; micBtn.classList.remove('on');
+    const t = finalText.trim(); finalText = '';
+    if (t) handleUtterance(t); else if (heard.textContent === 'Слушаю…') heard.textContent = 'Не расслышал, повторите';
+  };
+  rec.onerror = (e) => { heard.textContent = e.error === 'not-allowed' ? 'Нет доступа к микрофону' : 'Ошибка распознавания: ' + e.error; };
+}
+
+async function micStart() {
+  if (recording || recognizing) return;
+  stopSpeech();
+  if (!serverStt) {
+    if (!rec) { heard.textContent = 'Распознавание речи не настроено — выберите вариант кнопкой'; return; }
+    recording = true; micBtn.classList.add('on'); heard.textContent = 'Слушаю…';
+    try { rec.start(); } catch (_) { /* уже запущено */ }
+    return;
+  }
+  try {
+    const m = await ensureMic();
+    if (m.ctx.state === 'suspended') await m.ctx.resume();
+    m.chunks = [];
+    recording = true; micBtn.classList.add('on'); heard.textContent = 'Слушаю… отпустите, когда договорите';
+  } catch (err) {
+    heard.textContent = 'Нет доступа к микрофону: ' + err.message;
+  }
+}
+
+async function micStop() {
+  if (!recording) return;
+  recording = false; micBtn.classList.remove('on');
+  if (!serverStt) { if (rec) rec.stop(); return; }
+  const chunks = mic.chunks; mic.chunks = [];
+  const seconds = chunks.reduce((n, c) => n + c.length, 0) / mic.rate;
+  if (seconds < 0.4) { heard.textContent = 'Удерживайте кнопку, пока говорите'; return; }
+  // Тишину на распознавание не отправляем: это почти всегда не тот микрофон.
+  let peak = 0;
+  for (const c of chunks) for (let i = 0; i < c.length; i++) { const a = Math.abs(c[i]); if (a > peak) peak = a; }
+  if (peak < 0.004) {
+    heard.textContent = `Микрофон «${micLabel()}» молчит — выберите другой внизу справа`;
+    return;
+  }
+  recognizing = true; heard.textContent = 'Распознаю…';
+  try {
+    const r = await fetch('/voice/listen?dry_run=true', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: toWav(chunks, mic.rate) });
+    const res = await r.json();
+    if (!r.ok) throw new Error(res.detail || r.status);
+    heard.textContent = res.transcript ? '«' + res.transcript + '»' : `Не расслышал (микрофон «${micLabel()}»). Говорите громче или ближе`;
+    if (res.transcript) handleUtterance(res.transcript);
+  } catch (err) {
+    heard.textContent = 'Распознавание не удалось: ' + err.message;
+  } finally {
+    recognizing = false;
+  }
+}
+micBtn.addEventListener('pointerdown', micStart);
+micBtn.addEventListener('pointerup', micStop);
+micBtn.addEventListener('pointerleave', micStop);
+
+// ---------------------------------------------------------------------------
+// Состояние прохождения
+// ---------------------------------------------------------------------------
+const S = {
+  phase: 'loading',   // loading | select | gate | run | done
+  mode: CTRL.mode,
+  helmet: false,
+  present: false,
+  step: 0,
+  answered: false,     // текущий шаг пройден, ждём анимацию
+  errors: 0,
+  asks: 0,
+  ppe: 0,
+  lastError: null,
+  t0: 0,
+  pausedAt: 0,
+  pausedTotal: 0,
+};
+
+const $ = (id) => document.getElementById(id);
+window.S = S;
+
+function renderProgress() {
+  const p = $('progress'); p.innerHTML = '';
+  const n = stepCount();
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('i');
+    el.style.width = Math.min(46, Math.floor(520 / n)) + 'px';
+    if (i < S.step || (i === S.step && S.answered)) el.className = 'done';
+    else if (i === S.step && S.phase === 'run') el.className = 'cur';
+    p.appendChild(el);
+  }
+  sendStatus();
+}
+
+function renderStatus() {
+  const src = $('opSrc');
+  if (src) {
+    src.className = 'src ' + (HELMET.mode === 'cv' && !HELMET.assume ? 'live' : 'sim');
+    src.textContent = HELMET.assume ? 'проверка каски выключена'
+      : S.noCam ? 'без камеры (до смены режима)'
+      : demoOn ? 'каска: запись CV ●'
+      : HELMET.mode === 'cv' ? (cvAlive() ? 'каска: CV ●' : 'каска: CV — нет связи') : 'имитация';
+    $('opAssume').classList.toggle('on', HELMET.assume);
+    // на имитации кнопки показывают, что сейчас подставлено
+    const sim = HELMET.mode === 'sim';
+    $('opPerson').classList.toggle('on', sim);
+    $('opPerson').textContent = sim ? `Человек: ${HELMET.simPresent ? 'есть' : 'нет'} [P]` : 'Человек [P]';
+    $('opHelmet').classList.toggle('on', sim);
+    $('opHelmet').textContent = sim ? `Каска: ${HELMET.simPresent && HELMET.sim ? 'да' : 'нет'} [H]` : 'Каска [H]';
+    $('opCv').style.display = sim ? '' : 'none';
+  }
+}
+
+function renderQuestion() {
+  const box = $('question');
+  if (S.phase !== 'run') return;
+  if (isReview()) return renderReview();
+  const st = STEPS[S.step];
+  $('stepNo').textContent = '';
+  $('stepTitle').textContent = st.title;
+  if (S.arriving) {
+    box.innerHTML = '<div class="wait">Цистерна подаётся под эстакаду…</div>';
+    return;
+  }
+  if (S.answered) {
+    box.innerHTML = `<div class="wait">Выполняется: ${st.title.toLowerCase()}…</div>`;
+    return;
+  }
+  box.innerHTML = `<h2>${st.q}</h2><div id="options"></div>`;
+  st.options.forEach((o, i) => {
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.innerHTML = `<b>${i + 1}</b>${o.t}`;
+    b.onclick = () => choose(i);
+    $('options').appendChild(b);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Обзор: узлы эстакады с назначением, затем этапы операции — действие,
+// зачем оно, что будет при нарушении — и его анимация. Вопросов нет.
+// Анимации этапов накапливаются в сцене, поэтому назад внутри операции не
+// ходят; с первого этапа назад к узлам — сцена возвращается в исходное.
+// ---------------------------------------------------------------------------
+const ORDINAL = ['Первый', 'Второй', 'Третий', 'Четвёртый', 'Пятый', 'Шестой', 'Седьмой', 'Восьмой'];
+const lowerFirst = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+
+function reviewSpeech(item) {
+  if (item.kind === 'part') return `${item.title}. ${item.text}`;
+  const st = STEPS[item.i];
+  return `${ORDINAL[item.i]} этап. ${st.title}. Действие: ${lowerFirst(item.action)}. ${st.why}`;
+}
+
+const canGoBack = () => S.step > 0 && !S.busy && (REVIEW[S.step].kind === 'part' || REVIEW[S.step].i === 0);
+
+function renderReview() {
+  const item = REVIEW[S.step];
+  const op = item.kind === 'op';
+  const last = S.step === REVIEW.length - 1;
+  $('stepNo').textContent = op ? 'ОПЕРАЦИЯ' : 'ОБОРУДОВАНИЕ';
+  $('stepTitle').textContent = item.title;
+  const st = op ? STEPS[item.i] : null;
+  const cards = op
+    ? `<div class="card act"><small>ДЕЙСТВИЕ ОПЕРАТОРА</small>${item.action}</div>
+       <div class="card"><p><b>Зачем.</b> ${st.why}</p><p><b>Если нарушить.</b> ${st.skip}</p></div>`
+    : `<div class="card"><small>НАЗНАЧЕНИЕ</small>${item.text}</div>`;
+  $('question').innerHTML = `<h2>${item.title}</h2>
+    <div class="review">${cards}
+    <div class="nav"><button id="revBack" ${canGoBack() ? '' : 'disabled'}>← Назад</button>
+    <button class="next" id="revNext" ${S.busy ? 'disabled' : ''}>${S.busy ? 'Выполняется…' : last ? 'Завершить ✓' : 'Далее →'}</button></div></div>`;
+  $('revBack').onclick = () => reviewGo(-1);
+  $('revNext').onclick = () => reviewGo(1);
+}
+
+function reviewShow() {
+  const item = REVIEW[S.step];
+  renderProgress(); renderQuestion();
+  if (item.kind === 'part') {
+    if (S.opDone) { S3.anim.reset(); S3.anim.park(); S.opDone = 0; }
+    S3.focus(item.part);
+    say(reviewSpeech(item));
+    return;
+  }
+  focusStep(SCENE[item.i].part);
+  say(reviewSpeech(item));
+  if (S.opDone > item.i) return;
+  // этап показывается в 3D, пока звучит пояснение; «Далее» — после анимации
+  const run = S.run;
+  S.busy = true; renderQuestion();
+  setTimeout(async () => {
+    if (run !== S.run) return;
+    await SCENE[item.i].done();
+    if (run !== S.run) return;
+    S.opDone = item.i + 1;
+    S.busy = false;
+    renderQuestion();
+  }, 1500);
+}
+
+function reviewGo(d) {
+  if (S.phase !== 'run' || !S.helmet || S.busy) return;
+  if (d < 0 && !canGoBack()) return;
+  if (d > 0 && S.step === REVIEW.length - 1) { S.step = REVIEW.length; return finish(); }
+  S.step = Math.max(0, Math.min(REVIEW.length - 1, S.step + d));
+  reviewShow();
+}
+
+function flash(kind, text, sub) {
+  const f = $('flash');
+  f.className = 'show ' + kind;
+  f.firstElementChild.innerHTML = text + (sub ? `<small>${sub}</small>` : '');
+  clearTimeout(flash.t);
+  flash.t = setTimeout(() => { f.className = ''; }, kind === 'bad' ? 3200 : 1800);
+}
+
+function choose(i) {
+  if (S.phase !== 'run' || S.answered || S.arriving || !S.helmet || isReview()) return;
+  const st = STEPS[S.step];
+  const o = st.options[i];
+  const btns = document.querySelectorAll('.opt');
+  if (o.ok) {
+    btns[i].classList.add('ok');
+    btns.forEach(b => b.disabled = true);
+    S.answered = true;
+    S.lastError = null;
+    flash('ok', 'ДЕЙСТВИЕ СООТВЕТСТВУЕТ СОП ✓');
+    say(st.success);
+    renderProgress();
+    const run = S.run;
+    const next = () => {
+      if (run !== S.run) return;      // экран сбросили, пока шла анимация
+      if (S.phase === 'gate' || S.phase === 'pause') { S.pendingNext = true; return; }
+      S.answered = false; advance();
+    };
+    // узел шага анимируется в 3D, после этого — следующий вопрос
+    const step = S.step;
+    setTimeout(async () => {
+      if (run !== S.run) return;
+      renderQuestion();
+      await SCENE[step].done();
+      setTimeout(next, 1400);
+    }, 900);
+  } else {
+    btns[i].classList.add('bad');
+    btns[i].disabled = true;
+    S.errors++;
+    S.lastError = { step: S.step, choice: o.t, text: o.err };
+    flash('bad', 'ОШИБКА', 'Нарушена последовательность СОП');
+    say(o.err, 'bad');
+    // в 3D красным — то, что оператор собирался сделать, потом обратно к шагу
+    const wrong = SCENE[S.step].wrong[i];
+    const step = S.step;
+    if (wrong) {
+      S3.focus(wrong, 0xff3b3b);
+      clearTimeout(choose.back);
+      choose.back = setTimeout(() => { if (S.step === step && !S.answered) focusStep(SCENE[step].part); }, 3800);
+    }
+  }
+}
+
+function advance() {
+  if (S.step === STEPS.length - 1) return finish();
+  S.step++;
+  renderProgress();
+  renderQuestion();
+  focusStep(SCENE[S.step].part);
+  say(STEPS[S.step].q);
+}
+
+// ---------------------------------------------------------------------------
+// Вопросы к наставнику. Выбор варианта и «повтори» экран разбирает сам: это
+// решение сценария. Всё остальное — языковой модели стенда с регламентом и
+// состоянием этапа. Нет модели или она молчит — ответ по тексту СОП.
+// ---------------------------------------------------------------------------
+function norm(t) { return ' ' + t.toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim() + ' '; }
+
+// «Почему не вариант 1?» — вопрос, а не выбор.
+// Варианты на экране пронумерованы: одиночную букву с тихого микрофона Whisper
+// теряет или путает («а» → «В»), цифры распознаёт уверенно. Буквы тоже
+// принимаются — оператор может назвать и их.
+const QUESTION = / (почему|зачем|для чего|что|как|какой|какая|какие|где|когда|сколько|можно ли|нельзя|объясни|расскажи|подскажи|помоги) /;
+
+function pickOption(n) {
+  const words = n.trim().split(' ');
+  const short = words.length <= 3;
+  const letter = [
+    / (вариант |ответ |номер )?(1|один|одна|первый|первое|первая|а|a) /,
+    / (вариант |ответ |номер )?(2|два|две|второй|второе|вторая|б|бэ|b) /,
+    / (вариант |ответ |номер )?(3|три|третий|третье|третья|в|вэ|v) /,
+  ];
+  for (let i = 0; i < 3; i++) {
+    if (/ вариант | ответ /.test(n) || short) if (letter[i].test(n)) return i;
+  }
+  const st = STEPS[S.step];
+  const hits = st.options.map((o, i) => (o.kw.test(n) ? i : -1)).filter(i => i >= 0);
+  return hits.length === 1 ? hits[0] : -1;
+}
+
+function handleUtterance(text) {
+  addMsg(text, 'me');
+  const n = norm(text);
+  if (S.phase === 'pause') { say('Занятие на паузе. Дождитесь, пока инструктор его продолжит.'); return; }
+  if (S.phase !== 'run') { say('Сначала нужно пройти допуск: наденьте каску.'); return; }
+  if (/ повтор| еще раз | не понял /.test(n)) { say(lastSaid); return; }
+  const asking = QUESTION.test(n) || /\?\s*$/.test(text);
+  if (isReview() && !asking) {
+    if (/ (дальше|далее|следующ|продолж|вперед|готово|понятно) /.test(n)) { reviewGo(1); return; }
+    if (/ (назад|предыдущ|вернись|верни) /.test(n)) { reviewGo(-1); return; }
+  }
+  if (!isReview() && !S.answered && !S.arriving && !asking) {
+    const i = pickOption(n);
+    if (i >= 0) { choose(i); return; }
+    // «Вариант…» без номера — номер потерялся при распознавании
+    if (/^ (вариант|ответ|номер) $/.test(n)) { say('Не расслышал номер. Назовите вариант цифрой: один, два или три.'); return; }
+  }
+  askMentor(text, n);
+}
+
+// Ответ без модели — по тексту СОП.
+function templateAnswer(n) {
+  if (isReview()) {
+    const item = REVIEW[S.step];
+    if (item.kind === 'part') return `${item.title}. ${item.text} Скажите «дальше», чтобы перейти к следующему узлу.`;
+    const st = STEPS[item.i];
+    if (/ пропуст| если не | без этого | наруш/.test(n)) return `Если нарушить этап «${st.title.toLowerCase()}»: ${st.skip}`;
+    return `${st.title}. ${st.why}`;
+  }
+  const st = STEPS[S.step];
+  if (/ почему | ошибк| остановил| не так /.test(n)) {
+    if (S.lastError) return `Вы выбрали «${S.lastError.choice}». ${S.lastError.text}`;
+    return 'Ошибок сейчас нет: вы идёте по СОП верно.';
+  }
+  if (isExam()) return 'Режим экзамена: подсказки по ходу операции отключены. Выберите вариант сами.';
+  if (/ пропуст| если не | без этого /.test(n)) return `Если пропустить этап «${st.title.toLowerCase()}»: ${st.skip}`;
+  if (/ зачем | для чего | смысл /.test(n)) return st.why;
+  if (/ какой этап| где я | на каком /.test(n)) return `Этап ${S.step + 1} из ${STEPS.length}: ${st.title.toLowerCase()}.`;
+  return `Сейчас этап «${st.title.toLowerCase()}». Подсказка: ${st.hint}`;
+}
+
+let asking = 0;
+// Состояние для наставника. В обзоре этап — узел эстакады с его описанием
+// или показываемый этап операции; на экзамене модель предупреждена не
+// подсказывать ход операции.
+function mentorState() {
+  if (isReview()) {
+    const item = REVIEW[S.step];
+    const common = { question: '', options: [], last_error: null, errors: 0, helmet: S.helmet };
+    if (item.kind === 'part') {
+      return { ...common, step: S.step, steps_total: REVIEW.length, step_title: `обзор оборудования, узел «${item.title}»`,
+        notes: `Описание узла из модели эстакады: ${item.text} РЕЖИМ ОБЗОРА: обучаемый знакомится с оборудованием, вопросов с вариантами нет.`,
+        done: REVIEW.slice(0, S.step).map(x => x.title) };
+    }
+    const st = STEPS[item.i];
+    return { ...common, step: item.i, steps_total: STEPS.length, step_title: st.title,
+      notes: `Действие: ${item.action}. Зачем: ${st.why} Если нарушить: ${st.skip} РЕЖИМ ОБЗОРА: операцию показывают по этапам, порядок действий можно объяснять прямо.`,
+      done: STEPS.slice(0, item.i).map(x => x.title) };
+  }
+  const st = STEPS[S.step];
+  const exam = isExam()
+    ? ' РЕЖИМ ЭКЗАМЕНА: не называй правильный вариант и следующее действие, не намекай на них; объясняй только назначение оборудования и последствия уже совершённых ошибок.'
+    : '';
+  return {
+    step: S.step, steps_total: STEPS.length, step_title: st.title,
+    notes: (isExam() ? '' : `${st.hint} Зачем: ${st.why} Если пропустить: ${st.skip}`) + exam,
+    question: S.answered ? '' : st.q, options: S.answered ? [] : st.options.map(o => o.t),
+    done: STEPS.slice(0, S.step + (S.answered ? 1 : 0)).map(x => x.title),
+    last_error: S.lastError ? `выбрано «${S.lastError.choice}»: ${S.lastError.text}` : null,
+    errors: S.errors, helmet: S.helmet,
+  };
+}
+
+async function askMentor(text, n) {
+  S.asks++;
+  sendStatus();
+  if (!S.mentor) { say(templateAnswer(n)); return; }
+  const ticket = ++asking;
+  const wait = addMsg('Думаю…', 'ai think');
+  try {
+    const r = await fetch('/expo/ask', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: text, state: mentorState() }),
+    });
+    const res = await r.json();
+    if (!r.ok) throw new Error(res.detail || r.status);
+    wait.remove();
+    if (ticket === asking) say(res.answer);
+  } catch (_) {
+    wait.remove();
+    if (ticket === asking) say(templateAnswer(n));
+  }
+}
+
+// Быстрые вопросы — свои у режима; на экзамене их нет.
+const QUICK = {
+  review: [['Подробнее', 'Расскажите об этом подробнее'], ['Зачем это нужно?', 'Зачем это нужно?'],
+    ['Что если нарушить?', 'Что будет, если нарушить этот этап?']],
+  training: [['Что дальше?', 'Что делать дальше?'], ['Почему ошибка?', 'Почему ошибка?'],
+    ['Зачем этот шаг?', 'Зачем нужен этот шаг?'], ['Что если пропустить?', 'Что будет, если пропустить этот шаг?']],
+  exam: [],
+};
+function renderQuick() {
+  const box = $('quick');
+  box.innerHTML = '';
+  for (const [label, q] of QUICK[S.mode]) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => handleUtterance(q);
+    box.appendChild(b);
+  }
+  box.style.display = QUICK[S.mode].length ? '' : 'none';
+}
+
+// ---------------------------------------------------------------------------
+// Каска и допуск. Источник — подтверждённые состояния стенда (сглаживание
+// уже сделано там). Инструктор может перейти на имитацию клавишами P и H.
+// ---------------------------------------------------------------------------
+const HELMET = {
+  mode: 'cv',          // 'cv' | 'sim'
+  cv: null,            // 'on' | 'off' | null — подтверждённое состояние стенда
+  lastObsAt: 0,        // когда CV последний раз видел человека
+  sim: false,          // имитация: каска надета
+  simPresent: true,    // имитация: оператор в кадре
+  assume: false,       // инструктор отключил проверку каски
+};
+try { HELMET.assume = localStorage.getItem('expo-assume-helmet') === '1'; } catch (_) { /* приватный режим */ }
+const ABSENT_MS = 4000;      // столько без наблюдений — человека нет в кадре
+let absentSince = 0;
+
+function cvAlive() { return Date.now() - HELMET.lastObsAt < 15000 || videoOk; }
+
+function readPresence() {
+  // «Не проверять» — инструктор снял проверку: оператор есть и он в каске.
+  // «Продолжить без камеры» — то же, но только для текущего посетителя.
+  if (HELMET.assume || S.noCam) return { present: true, helmet: true };
+  if (HELMET.mode === 'sim') return { present: HELMET.simPresent, helmet: HELMET.simPresent && HELMET.sim };
+  const seen = Date.now() - HELMET.lastObsAt < ABSENT_MS;
+  return { present: seen || HELMET.cv !== null, helmet: HELMET.cv === 'on' };
+}
+
+// Решение о допуске принимается раз в полсекунды по сводке, а не по каждому
+// событию: так «не видно» отличается от «снял каску».
+function evaluate() {
+  const { present, helmet } = readPresence();
+  const changed = present !== S.present || helmet !== S.helmet;
+  S.present = present; S.helmet = helmet;
+  if (changed) renderStatus();
+  const ok = present && helmet;
+
+  if (S.phase === 'gate') {
+    renderGate();
+    if (ok && !S.gateOpening) {
+      S.gateOpening = true;
+      $('gate').classList.add('okstate');
+      // фраза допуска договаривается, прежде чем её перебьёт сценарий (не дольше 4 с)
+      const spoken = say(S.noCam ? 'Продолжаем без камеры.' : S.t0 ? 'Требование восстановлено. Продолжаем.' : 'Каска обнаружена. Допуск разрешён.');
+      setTimeout(async () => {
+        await Promise.race([spoken, new Promise((r) => setTimeout(r, 2400))]);
+        S.gateOpening = false;
+        if (S.phase !== 'gate' || !(S.present && S.helmet)) return;
+        S.t0 ? resumeRun() : startRun();
+      }, 1600);
+    }
+    return;
+  }
+  if (S.phase !== 'run') return;
+  if (present && !helmet) {
+    S.ppe++;
+    stopRun('off');
+    say('Внимание. Каска больше не обнаружена. Обнаружено несоответствие требованиям СИЗ, продолжение сценария заблокировано.', 'bad');
+  } else if (!present) {
+    absentSince = absentSince || Date.now();
+    if (Date.now() - absentSince > 2500) {
+      stopRun('absent');
+      say('Оператор вне кадра. Сценарий приостановлен — встаньте перед камерой.');
+    }
+  } else {
+    absentSince = 0;
+  }
+}
+
+function stopRun(reason) {
+  S.pausedAt = Date.now();
+  S.pauseReason = reason;
+  absentSince = 0;
+  S3.pause();
+  S.phase = 'gate';
+  renderGate();
+  $('gate').classList.add('show');
+}
+
+function renderGate() {
+  const paused = !!S.t0;
+  const ok = S.present && S.helmet;
+  $('gate').classList.toggle('okstate', ok);
+  const row = (id, good, text) => { $(id).className = 'row ' + (good ? 'ok' : 'bad'); $(id).textContent = text; };
+  row('gPerson', S.present, S.noCam ? 'БЕЗ КАМЕРЫ' : S.present ? 'ОПЕРАТОР ОБНАРУЖЕН' : 'ВСТАНЬТЕ ПЕРЕД КАМЕРОЙ');
+  if (ok) {
+    row('gHelmet', true, S.noCam ? 'КАСКА: БЕЗ ПРОВЕРКИ' : 'КАСКА: ОБНАРУЖЕНА ✓');
+    row('gAccess', true, paused ? 'ТРЕБОВАНИЕ ВОССТАНОВЛЕНО' : 'СЦЕНАРИЙ АКТИВИРОВАН');
+    $('gNote').textContent = paused ? 'Продолжаем' : 'Допуск разрешён';
+  } else {
+    row('gHelmet', false, !S.present ? 'КАСКА: —' : paused ? 'КАСКА БОЛЬШЕ НЕ ОБНАРУЖЕНА ✕' : 'КАСКА: НЕ ОБНАРУЖЕНА ✕');
+    row('gAccess', false, paused ? 'ПРОХОЖДЕНИЕ ПРИОСТАНОВЛЕНО' : 'ДОПУСК К СЦЕНАРИЮ: ЗАБЛОКИРОВАН');
+    $('gNote').textContent = !S.present ? 'Подойдите ближе, чтобы камера вас увидела' : 'Наденьте защитную каску';
+  }
+}
+setInterval(evaluate, 500);
+
+async function startRun() {
+  $('gate').classList.remove('show');
+  S.phase = 'run'; S.t0 = Date.now();
+  if (isReview()) {
+    S3.anim.park();
+    renderStatus();
+    reviewShow();
+    return;
+  }
+  // Цистерна заезжает под стояк из своей точки в уровне, пока звучит вводная.
+  const run = S.run;
+  S.arriving = true;
+  renderStatus(); renderProgress(); renderQuestion();
+  say(STEPS[0].intro);
+  S3.clear(); S3.view('arrival', 1400);
+  await S3.anim.arrive();
+  if (run !== S.run) return;      // за время заезда экран сбросили
+  S.arriving = false;
+  renderQuestion();
+  focusStep(SCENE[0].part);
+}
+
+// Пауза с пульта: сцена, голос и время стоят, каска не проверяется.
+function pauseRun() {
+  if (S.phase !== 'run') return;
+  S.pausedAt = Date.now();
+  S.phase = 'pause';
+  stopSpeech();
+  S3.pause();
+  $('pause').classList.add('show');
+  renderStatus(); renderProgress();
+}
+
+function resumeRun() {
+  $('gate').classList.remove('show');
+  $('pause').classList.remove('show');
+  S.pausedTotal += Date.now() - S.pausedAt;
+  S.phase = 'run';
+  renderStatus();
+  S3.resume();
+  if (S.pendingNext) { S.pendingNext = false; S.answered = false; advance(); }
+}
+
+function finish() {
+  S.phase = 'done';
+  const sec = Math.round((Date.now() - S.t0 - S.pausedTotal) / 1000);
+  const n = stepCount();
+  const time = `${Math.floor(sec / 60)} мин ${String(sec % 60).padStart(2, '0')} сек`;
+  const ppe = S.noCam ? ['СИЗ', 'не проверялись', '']
+    : ['СИЗ', S.ppe ? `нарушений: ${S.ppe}` : 'соответствует ✓', S.ppe ? 'bad' : 'ok'];
+  // Экзамен сдан, если операция выполнена без ошибок последовательности и без нарушений СИЗ.
+  const passed = isExam() ? !S.errors && !S.ppe : null;
+  const rows = isReview() ? [
+    ppe,
+    ['Узлов оборудования изучено', `${LESSON.equipment.length}/${LESSON.equipment.length}`],
+    ['Этапов операции показано', `${STEPS.length}/${STEPS.length}`],
+    ['Вопросов наставнику', S.asks],
+    ['Время', time],
+  ] : [
+    ...(isExam() ? [['Результат экзамена', passed ? 'ЗАЧЁТ' : 'НЕЗАЧЁТ', passed ? 'ok' : 'bad']] : []),
+    ppe,
+    ['Этапов выполнено', `${n}/${n}`],
+    ['Ошибок последовательности', S.errors, S.errors ? 'bad' : ''],
+    ['Обращений к наставнику', S.asks],
+    ['Время', time],
+  ];
+  $('reportTable').innerHTML = rows.map(([k, v, c]) => `<tr><td>${k}</td><td class="${c || ''}">${v}</td></tr>`).join('');
+  $('reportSub').textContent = `${LESSON.title} · режим «${modeTitle()}»`;
+  setTimeout(() => $('report').classList.add('show'), 1500);
+  sendStatus();
+  fetch('/expo/result', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ steps_done: n, steps_total: n, errors: S.errors,
+      ppe_violations: S.ppe, asks: S.asks, seconds: sec, helmet_source: S.noCam ? 'no-camera' : HELMET.mode,
+      lesson: LESSON.id, mode: S.mode, passed }),
+  }).then(r => r.json()).then(r => {
+    if (r.saved) $('reportSub').textContent += ` · протокол №${r.count} сохранён`;
+  }).catch(() => {});
+}
+
+// После протокола инструктор выбирает на пульте, что дальше: режим и старт.
+// На самостоятельном месте — снова выбор режима.
+$('repNext').onclick = () => (SELF ? showModes() : pultToggle(true));
+if (SELF) $('repNext').textContent = 'Выбрать режим';
+
+// ---------------------------------------------------------------------------
+// Самостоятельное место: выбор режима на экране; ушедший посетитель через
+// минуту без человека в кадре возвращает экран к выбору.
+// ---------------------------------------------------------------------------
+function showModes() {
+  stopSpeech();
+  ['gate', 'pause', 'report', 'splash'].forEach((id) => $(id).classList.remove('show'));
+  Object.assign(S, { phase: 'select', t0: 0, run: (S.run || 0) + 1, arriving: false, gateOpening: false, noCam: false });
+  renderStatus();
+  if (S3) { S3.resume(); S3.anim.reset(); S3.clear(); S3.view('overview'); }
+  $('modesLesson').textContent = LESSON.title;
+  $('mcards').innerHTML = MODE_ORDER.map((m) => `<button class="mcard" data-mode="${m}"><div class="num">${MODES[m].n}</div>`
+    + `<b>${MODES[m].title}</b><span>${MODES[m].note}</span><div class="go">Начать →</div></button>`).join('');
+  $('modes').classList.add('show');
+  sendStatus();
+}
+$('mcards').onclick = (e) => {
+  const b = e.target.closest('[data-mode]');
+  if (!b || !S3) return;
+  CTRL.mode = b.dataset.mode;
+  saveCtrl();
+  $('modes').classList.remove('show');
+  // первый звук браузер разрешает только после действия пользователя
+  if ('speechSynthesis' in window) speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+  resetAll();
+};
+$('homeBtn').onclick = () => { if (S3) showModes(); };
+$('gateBack').onclick = () => { if (S3) showModes(); };
+$('againBtn').onclick = () => { if (S3 && S.phase !== 'select') resetAll(); };
+// Камера не видит или её нет: посетитель проходит без проверки каски.
+$('gateNoCam').onclick = () => { S.noCam = true; renderStatus(); evaluate(); };
+let awaySince = 0;
+setInterval(() => {
+  if (!SELF || !S3 || S.phase === 'select' || splashShown() || HELMET.assume || S.noCam || !cvAlive()) { awaySince = 0; return; }
+  awaySince = S.present ? 0 : awaySince || Date.now();
+  if (awaySince && Date.now() - awaySince > 60000) { awaySince = 0; showModes(); }
+}, 1000);
+
+// ---------------------------------------------------------------------------
+// Режим выбирает инструктор на пульте; экран только называет текущий в шапке.
+// ---------------------------------------------------------------------------
+function renderModeLine() {
+  $('modeLine').textContent = MODES[S.mode].title;
+}
+
+// Занятие и режим с пульта ложатся здесь — на следующее прохождение.
+function applyLesson() {
+  LESSON = lessonById(CTRL.lesson);
+  STEPS = LESSON.steps;
+  S.mode = CTRL.mode;
+  buildReview();
+  $('lessonTitle').textContent = LESSON.title;
+  $('splashLesson').textContent = LESSON.title;
+  renderModeLine();
+  renderQuick();
+}
+
+function resetAll() {
+  Object.assign(S, { phase: 'idle', step: 0, answered: false, pendingNext: false, errors: 0, asks: 0, ppe: 0,
+    lastError: null, t0: 0, pausedAt: 0, pausedTotal: 0, gateOpening: false, arriving: false, busy: false, opDone: 0,
+    run: (S.run || 0) + 1 });
+  applyLesson();
+  $('clock').textContent = '00:00';
+  HELMET.sim = false;
+  ['gate', 'pause', 'report'].forEach(id => $(id).classList.remove('show'));
+  $('chat').innerHTML = '';
+  $('heard').textContent = '';
+  $('stepNo').textContent = 'ПОДГОТОВКА'; $('stepTitle').textContent = 'Ожидание оператора';
+  $('question').innerHTML = '<div class="wait">Наденьте каску, чтобы начать.</div>';
+  stopSpeech();
+  S3.resume(); S3.anim.reset(); S3.clear(); S3.view('overview');
+  S.phase = 'gate';
+  renderStatus(); renderProgress();
+  $('gate').classList.add('show');
+  renderGate();
+}
+
+// Сцена загрузилась — открывается пульт: инструктор выбирает занятие и режим
+// и запускает оттуда. Кнопка «Начать» на заставке — если пульт закрыли.
+const splashShown = () => $('splash').classList.contains('show');
+const renderStartBtn = () => { $('startBtn').style.display = S3 && !$('pult').classList.contains('show') ? '' : 'none'; };
+sceneReady.then(() => {
+  $('splashText').style.display = 'none';
+  $('splashBar').style.display = 'none';
+  if (SELF) showModes(); else pultToggle(true);
+}).catch((e) => { $('splashText').textContent = 'Не удалось загрузить 3D-сцену: ' + e.message; });
+function startFromSplash() {
+  $('splash').classList.remove('show');
+  // первый звук разрешается браузером только после действия пользователя;
+  // нажатие внутри пульта поверх экрана тоже считается
+  if ('speechSynthesis' in window) speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+  resetAll();
+}
+$('startBtn').onclick = startFromSplash;
+
+// ---------------------------------------------------------------------------
+// Заглушки: имитация человека и каски на случай, если CV недоступен, и сброс.
+// Первое нажатие переводит на имитацию с тем, что видно сейчас, и меняет своё.
+// ---------------------------------------------------------------------------
+function simStart() {
+  if (HELMET.mode === 'sim') return false;
+  HELMET.mode = 'sim'; HELMET.simPresent = S.present; HELMET.sim = S.helmet;
+  return true;
+}
+function simToggle() {
+  simStart();
+  HELMET.sim = !HELMET.sim;
+  if (HELMET.sim) HELMET.simPresent = true;   // каску надевает человек в кадре
+  renderStatus(); evaluate();
+}
+function personToggle() {
+  simStart();
+  HELMET.simPresent = !HELMET.simPresent;
+  renderStatus(); evaluate();
+}
+function cvBack() { HELMET.mode = 'cv'; renderStatus(); evaluate(); }
+// Запись CV: настоящий прогон CV (каска надета) проигрывается через
+// приём стенда, будто события идут с камеры, а ролик крутится в окне камеры.
+// После конца записи стенд удерживает «надета».
+const DEMO_LOG = 'real-helmet-long';
+let demoOn = false;
+async function demoToggle() {
+  const v = $('demoVideo');
+  if (!demoOn) {
+    try {
+      const r = await fetch(`/cv/logs/${DEMO_LOG}/play`, { method: 'POST' });
+      if (!r.ok) throw new Error(`сервер ответил ${r.status}`);
+    } catch (err) {
+      heard.textContent = 'Запись CV не запустилась: ' + err.message;
+      return;
+    }
+    demoOn = true;
+    HELMET.mode = 'cv';
+    v.src = `/cv/logs/${DEMO_LOG}/video`;
+    v.hidden = false;
+    v.play().catch(() => {});
+    $('nocam').style.display = 'none';
+  } else {
+    demoOn = false;
+    fetch('/cv/logs/stop', { method: 'POST' }).catch(() => {});
+    v.pause(); v.hidden = true; v.removeAttribute('src'); v.load();
+    HELMET.cv = null; HELMET.lastObsAt = 0;
+    if (!videoOk) $('nocam').style.display = '';
+  }
+  $('opDemo').classList.toggle('on', demoOn);
+  renderStatus(); evaluate();
+}
+$('opDemo').onclick = demoToggle;
+
+function assumeToggle(fromPult = false) {
+  HELMET.assume = !HELMET.assume;
+  try { localStorage.setItem('expo-assume-helmet', HELMET.assume ? '1' : '0'); } catch (_) { /* приватный режим */ }
+  // пульт должен знать, иначе следующая его команда вернёт прежнее
+  if (!fromPult) fetch('/expo/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assume_helmet: HELMET.assume }) }).catch(() => {});
+  renderStatus(); evaluate(); sendStatus();
+}
+$('opAssume').onclick = () => assumeToggle();
+$('opHelmet').onclick = simToggle;
+$('opPerson').onclick = personToggle;
+$('opCv').onclick = cvBack;
+$('opReset').onclick = () => { if (S3) resetAll(); };
+$('opNote').innerHTML = '<span id="opSrc" class="src"></span>';
+$('viewBtn').onclick = () => setView(CTRL.view === 'eye' ? 'orbit' : 'eye');
+
+// ---------------------------------------------------------------------------
+// Пульт инструктора: команды приходят через /expo/live, экран отвечает своим
+// состоянием (/expo/status). Пульт открывается и поверх экрана — клавиша I.
+// ---------------------------------------------------------------------------
+function pultToggle(show = !$('pult').classList.contains('show')) {
+  const f = $('pultFrame');
+  if (show && !f.src) f.src = '/expo/instructor?embed=1';
+  $('pult').classList.toggle('show', show);
+  if (splashShown()) renderStartBtn();
+  placeSplash();
+}
+// Пока пульт открыт поверх заставки, логотип стоит в свободной части экрана.
+function placeSplash() {
+  const f = $('pultFrame');
+  $('pult').classList.toggle('onsplash', splashShown());
+  if (!$('pult').classList.contains('show')) { $('splash').style.paddingRight = ''; return; }
+  const st = $('stage').getBoundingClientRect();
+  const s = st.width / 1920;
+  const free = (innerWidth - f.offsetWidth - st.left) / s;
+  $('splash').style.paddingRight = Math.max(0, 1920 - free) + 'px';
+}
+$('opPult').onclick = () => pultToggle();
+$('pult').onclick = (e) => { if (e.target.id === 'pult') pultToggle(false); };
+addEventListener('message', (e) => { if (e.origin === location.origin && e.data === 'pult:close') pultToggle(false); });
+
+function applyControl(state, command) {
+  const lessonChanged = state.lesson !== CTRL.lesson || state.mode !== CTRL.mode;
+  CTRL.lesson = state.lesson;
+  if (MODES[state.mode]) CTRL.mode = state.mode;
+  saveCtrl();
+  if (state.view && state.view !== CTRL.view) setView(state.view, true);
+  if (typeof state.assume_helmet === 'boolean' && state.assume_helmet !== HELMET.assume) assumeToggle(true);
+  const splash = splashShown();
+  if (command === 'demo') demoToggle();
+  // старт с пульта закрывает его: дальше оператор работает с экраном
+  else if (command === 'start' && S3) { pultToggle(false); splash ? startFromSplash() : resetAll(); }
+  else if (command === 'reset' && S3 && !splash) resetAll();
+  else if (command === 'pause') pauseRun();
+  else if (command === 'resume' && S.phase === 'pause') resumeRun();
+  // пока прохождение не началось, занятие и режим с пульта применяются сразу
+  else if (lessonChanged && S3 && !splash && S.phase === 'gate' && !S.t0) resetAll();
+  sendStatus();
+}
+
+function connectPult() {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/expo/live`);
+  ws.onmessage = (m) => {
+    const msg = JSON.parse(m.data);
+    if (msg.type === 'control') applyControl(msg.state, msg.command);
+  };
+  ws.onclose = () => setTimeout(connectPult, 1500);
+}
+
+let statusTimer = null;
+function sendStatus() {
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => {
+    const splash = $('splash').classList.contains('show');
+    const sec = S.t0 ? Math.floor((Date.now() - S.t0 - S.pausedTotal - (S.phase === 'gate' || S.phase === 'pause' ? Date.now() - S.pausedAt : 0)) / 1000) : 0;
+    const title = ['run', 'gate', 'pause'].includes(S.phase)
+      ? (isReview() ? REVIEW[Math.min(S.step, REVIEW.length - 1)].title : STEPS[S.step].title) : '';
+    fetch('/expo/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+      phase: splash ? 'splash' : S.phase, lesson: LESSON.id, mode: S.mode, view: CTRL.view,
+      step: Math.min(S.step, stepCount()), steps_total: stepCount(), step_title: title,
+      errors: S.errors, asks: S.asks, seconds: Math.max(0, sec), present: S.present, helmet: S.helmet,
+      helmet_source: ($('opSrc') && $('opSrc').textContent) || '',
+    }) }).catch(() => {});
+  }, 150);
+}
+setInterval(sendStatus, 3000);
+
+document.addEventListener('keydown', (e) => {
+  if (e.repeat || e.target.tagName === 'SELECT') return;
+  if (e.code === 'KeyV') { setView(CTRL.view === 'eye' ? 'orbit' : 'eye'); return; }
+  if (e.code === 'KeyI') { pultToggle(); return; }
+  if (e.code === 'KeyO') { document.body.classList.toggle('staff'); return; }
+  if (e.code === 'Escape') { pultToggle(false); return; }
+  if (S.phase === 'run' && isReview() && (e.code === 'ArrowRight' || e.code === 'Enter')) { reviewGo(1); return; }
+  if (S.phase === 'run' && isReview() && e.code === 'ArrowLeft') { reviewGo(-1); return; }
+  if (e.code === 'KeyH') simToggle();
+  else if (e.code === 'KeyP') personToggle();
+  else if (e.code === 'KeyK') assumeToggle();
+  else if (e.code === 'KeyD') demoToggle();
+  else if (e.code === 'KeyC') cvBack();
+  else if (e.code === 'KeyR' && S3) resetAll();
+  else if (e.code === 'Space') { e.preventDefault(); micStart(); }
+  else if (S.phase === 'run' && ['Digit1', 'Digit2', 'Digit3'].includes(e.code)) choose(+e.code.slice(-1) - 1);
+});
+document.addEventListener('keyup', (e) => { if (e.code === 'Space') micStop(); });
+
+// ---------------------------------------------------------------------------
+// Камера и масштаб
+// ---------------------------------------------------------------------------
+// Кадр с рамками отдаёт сам модуль распознавания (MJPEG на порту 8081, как
+// на /check). Камеру он держит сам — браузеру её брать нельзя, иначе модуль
+// её не откроет. Без модуля: ?webcam=1 покажет вебкамеру напрямую.
+const params = new URLSearchParams(location.search);
+const VIDEO_URL = params.get('video') || `http://${location.hostname || '127.0.0.1'}:8081/video`;
+let videoOk = false, videoRetry = null;
+
+function connectVideo() {
+  clearTimeout(videoRetry);
+  const img = $('cvVideo');
+  img.onload = () => { videoOk = true; img.hidden = false; $('nocam').style.display = 'none'; renderStatus(); };
+  img.onerror = () => {
+    videoOk = false; img.hidden = true;
+    if ($('video').hidden && !demoOn) { $('nocam').style.display = ''; $('nocam').textContent = 'Камера: жду модуль распознавания'; }
+    videoRetry = setTimeout(connectVideo, 3000);
+  };
+  img.src = `${VIDEO_URL}${VIDEO_URL.includes('?') ? '&' : '?'}t=${Date.now()}`;
+}
+
+async function startWebcam() {
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
+    $('video').srcObject = s; $('video').hidden = false;
+    $('nocam').style.display = 'none';
+  } catch (_) { /* остаётся заглушка */ }
+}
+
+function connectStand() {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onmessage = (m) => {
+    const { type, payload } = JSON.parse(m.data);
+    if (type === 'snapshot') {
+      const v = payload.observed_state && payload.observed_state.helmet;
+      if (v !== undefined) HELMET.cv = v === 'on' || v === 'off' ? v : null;
+    } else if (type === 'observation' && payload.variable === 'helmet') {
+      if (!payload.unclear) HELMET.lastObsAt = Date.now();
+    } else if (type === 'state' && payload.variable === 'helmet') {
+      HELMET.cv = payload.quality === 'confirmed' ? payload.value : null;
+    }
+  };
+  ws.onclose = () => setTimeout(connectStand, 1500);
+}
+
+async function initStand() {
+  try {
+    const vs = await (await fetch('/voice/state')).json();
+    serverStt = vs.server_stt === true;
+    serverTts = vs.tts_engine && vs.tts_engine !== 'browser';
+  } catch (_) { serverStt = false; serverTts = false; }
+  prefetchVoice();
+  const mentorState = async () => {
+    try { S.mentor = (await (await fetch('/expo/state')).json()).mentor === true; } catch (_) { S.mentor = false; }
+  };
+  await mentorState();
+  // Заодно держит тёплыми соединения стенда с наставником и распознаванием.
+  setInterval(() => { mentorState(); fetch('/voice/state').catch(() => {}); }, 60000);
+  if (navigator.mediaDevices) listMics().catch(() => {});
+  connectStand();
+  // на самостоятельном месте режим выбирает посетитель: команды пульта не слушаем
+  if (!SELF) connectPult();
+  if (params.get('webcam') === '1') startWebcam(); else connectVideo();
+}
+
+function fit() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  const st = $('stage');
+  st.style.transform = `scale(${s})`;
+  st.style.left = (innerWidth - 1920 * s) / 2 + 'px';
+  st.style.top = (innerHeight - 1080 * s) / 2 + 'px';
+}
+addEventListener('resize', () => { fit(); placeSplash(); });
+applyLesson(); fit(); renderStatus(); renderProgress(); initStand();
+setInterval(() => {
+  if (!S.t0 || S.phase === 'done') return;
+  const paused = S.phase === 'gate' || S.phase === 'pause' ? Date.now() - S.pausedAt : 0;
+  const sec = Math.floor((Date.now() - S.t0 - S.pausedTotal - paused) / 1000);
+  $('clock').textContent = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+}, 500);
+</script>
+</body>
+</html>

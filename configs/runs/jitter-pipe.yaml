@@ -1,0 +1,82 @@
+# Главный тест сглаживания.
+#
+# Труба зависает между «над горловиной» и «опущена до упора» — визуально эти
+# состояния различаются несколькими сантиметрами. Модель мечется между ними
+# по пятнадцать раз в секунду с посредственной уверенностью.
+#
+# Правильное поведение системы: НЕ выдавать вердиктов на дребезге, дождаться
+# устоявшегося состояния и зачесть шаг один раз. Ожидаемая последовательность
+# здесь такая же, как в чистом прогоне — в этом весь смысл проверки.
+
+id: jitter-pipe
+title: Дребезг трубы на границе состояний
+scenario: kft-01
+description: >-
+  Восемь секунд неустойчивого распознавания положения трубы. Проверяет окно
+  подтверждения: система не должна дёргаться и выдавать лишние оценки.
+duration_sec: 60
+
+noise:
+  confidence_mean: 0.82
+  confidence_jitter: 0.10
+  flicker_prob: 0.05
+  unclear_prob: 0.03
+
+timeline:
+  - at: 3
+    set:
+      grounding_lamp: green
+    transition_sec: 1.0
+
+  - at: 9
+    set:
+      hatch_cover: open
+    transition_sec: 1.2
+
+  - at: 15
+    set:
+      pipe_position: over_hatch
+    transition_sec: 1.5
+
+  - at: 20
+    note: Труба зависла на границе — модель мечется между over_hatch и seated
+    flicker:
+      variable: pipe_position
+      between: [over_hatch, seated]
+      duration_sec: 8
+      confidence_mean: 0.5
+
+  - at: 29
+    note: Труба доведена до упора, распознавание устоялось
+    set:
+      pipe_position: seated
+    transition_sec: 1.0
+
+  - at: 36
+    set:
+      clamp_weight: pressed
+    transition_sec: 1.0
+
+  - at: 43
+    set:
+      pipe_position: bottom
+    transition_sec: 2.5
+
+  - at: 53
+    voice: ready_report
+
+expected:
+  - step: grounding
+    kind: MATCH
+  - step: hatch
+    kind: MATCH
+  - step: pipe_over
+    kind: MATCH
+  - step: pipe_seated
+    kind: MATCH
+  - step: clamp
+    kind: MATCH
+  - step: pipe_bottom
+    kind: MATCH
+  - step: report
+    kind: MATCH

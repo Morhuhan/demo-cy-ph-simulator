@@ -1,0 +1,58 @@
+# Критическая блокировка: оператор открывает люк, не подключив заземление.
+#
+# По регламенту это ведёт к искре от статического электричества и возгоранию
+# при открытии люка. Система обязана остановить сценарий немедленно, а не
+# отметить «нарушен порядок» и продолжить.
+
+id: hatch-before-grounding
+title: Люк без заземления
+scenario: kft-01
+description: >-
+  Оператор пропускает первый шаг и сразу берётся за крышку люка. Ожидается
+  критическое предупреждение с остановкой, затем исправление и нормальное
+  продолжение.
+duration_sec: 34
+
+noise:
+  confidence_mean: 0.88
+  confidence_jitter: 0.06
+  flicker_prob: 0.02
+  unclear_prob: 0.01
+
+timeline:
+  - at: 2
+    note: Оператор сразу берётся за крышку люка, минуя заземление
+
+  - at: 3
+    set:
+      hatch_cover: open
+    transition_sec: 1.2
+
+  - at: 12
+    note: Оператор возвращает крышку в закрытое положение
+    set:
+      hatch_cover: closed
+    transition_sec: 1.0
+
+  - at: 17
+    note: Заземление подключено — теперь по регламенту
+    set:
+      grounding_lamp: green
+    transition_sec: 1.0
+
+  - at: 24
+    note: Повторное открытие люка, на этот раз законное
+    set:
+      hatch_cover: open
+    transition_sec: 1.2
+
+expected:
+  - step: hatch
+    kind: MISMATCH
+    reason: precondition_violated
+  - step: grounding
+    kind: MATCH
+    reason: step_completed
+  - step: hatch
+    kind: MATCH
+    reason: step_completed

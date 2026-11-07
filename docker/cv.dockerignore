@@ -1,0 +1,12 @@
+# Веса подключаются томом, окружения и ролики в образе не нужны.
+models
+.venv*
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+*.mp4
+*.avi
+*.mov
+*.mkv
+config.laptop.yaml
+runs

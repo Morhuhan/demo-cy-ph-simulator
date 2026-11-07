@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "VoiceIntent": {
+      "enum": [
+        "repeat",
+        "help",
+        "ready_report",
+        "unknown"
+      ],
+      "title": "VoiceIntent",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Распознанная реплика оператора.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "description": "Версия контракта. Мажорная часть — признак совместимости.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Уникальный идентификатор сообщения",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "ts": {
+      "description": "Момент формирования сообщения, UTC",
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "intent": {
+      "$ref": "#/$defs/VoiceIntent"
+    },
+    "transcript": {
+      "description": "Распознанный текст как есть",
+      "title": "Transcript",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "engine": {
+      "description": "Реализация STT",
+      "examples": [
+        "faster-whisper",
+        "manual-ui"
+      ],
+      "title": "Engine",
+      "type": "string"
+    }
+  },
+  "required": [
+    "intent",
+    "transcript",
+    "confidence",
+    "engine"
+  ],
+  "title": "voice-command",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

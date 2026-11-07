@@ -1,0 +1,446 @@
+diff --git a/app.py b/app.py
+index e7f2f78..f74adfc 100644
+--- a/app.py
++++ b/app.py
+@@ -14,6 +14,7 @@ from src.background_transport import BackgroundTransport
+ from src.frame_scheduler import FrameScheduler
+ from src.logging_setup import configure_logging
+ from src.pipeline import CvPipeline, PipelineResult
++from src.preview import PreviewServer
+ from src.schemas import ObjectStateEvent, ServiceEvent
+ from src.sync_transport import StateSyncTransport
+ from src.transport import WebSocketTransport
+@@ -47,6 +48,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+         type=Path,
+         help="папка для events.jsonl и annotated.mp4",
+     )
++    parser.add_argument(
++        "--preview-port",
++        type=_positive_int,
++        help="отдавать кадр с рамками в браузер: http://127.0.0.1:<порт>/video",
++    )
+     return parser.parse_args(argv)
+ 
+ 
+@@ -65,6 +71,9 @@ def main() -> int:
+     args = parse_args()
+     config = create_application(args.config)
+     source = _parse_source(args.source) if args.source is not None else None
++    if args.preview_port is not None:
++        config.preview.enabled = True
++        config.preview.port = args.preview_port
+     return run(
+         config,
+         show_window=config.debug.show_window and not args.no_window,
+@@ -102,10 +111,21 @@ def run(
+         else None
+     )
+ 
++    preview = _start_preview(config)
+     if not source.open():
+-        logger.error("Не удалось открыть источник: %s", config.camera.source)
+-        transport.close()
+-        return 1
++        if source.kind is SourceKind.FILE:
++            logger.error("Не удалось открыть источник: %s", source.source)
++            transport.close()
++            if preview is not None:
++                preview.close()
++            return 1
++        logger.warning(
++            "Камера не найдена: %s, повтор каждые %.0f с",
++            source.source,
++            config.stream.reconnect_interval_sec,
++        )
++
++    last_result: PipelineResult | None = None
+ 
+     logger.info("Демо запущено, для завершения нажмите q в окне")
+     processed_frames = 0
+@@ -113,6 +133,11 @@ def run(
+     last_heartbeat = monotonic()
+     try:
+         while source.status not in {SourceStatus.ENDED, SourceStatus.CLOSED}:
++            if preview is not None:
++                preview.camera_active = source.status is SourceStatus.ACTIVE
++                if preview.take_retry() and source.status is not SourceStatus.ACTIVE:
++                    logger.info("Повторный поиск камеры")
++                    source.open()
+             frame = source.read()
+             _dispatch_source_status(pipeline, source.status, transport, artifacts)
+             now = monotonic()
+@@ -132,6 +157,12 @@ def run(
+                 sleep(0.01)
+                 continue
+             if not scheduler.should_process(scheduler_time_for_frame(frame, source.kind)):
++                if preview is not None and preview.due():
++                    preview.publish(
++                        _draw_debug_frame(frame.image, last_result)
++                        if last_result is not None
++                        else frame.image
++                    )
+                 continue
+ 
+             result = pipeline.process(
+@@ -140,9 +171,12 @@ def run(
+                 frame_ts=frame.timestamp,
+             )
+             processed_frames += 1
++            last_result = result
+             debug_frame = None
+-            if show_window or artifacts is not None:
++            if show_window or artifacts is not None or preview is not None:
+                 debug_frame = _draw_debug_frame(frame.image, result)
++            if preview is not None and debug_frame is not None:
++                preview.publish(debug_frame)
+             if artifacts is not None and debug_frame is not None:
+                 artifacts.open(debug_frame)
+                 artifacts.write_frame(debug_frame)
+@@ -158,6 +192,8 @@ def run(
+     finally:
+         source.close()
+         transport.close()
++        if preview is not None:
++            preview.close()
+         if artifacts is not None:
+             artifacts.close()
+         if show_window:
+@@ -173,6 +209,26 @@ def run(
+     return 0
+ 
+ 
++def _start_preview(config: AppConfig) -> PreviewServer | None:
++    if not config.preview.enabled:
++        return None
++    try:
++        preview = PreviewServer(
++            host=config.preview.host,
++            port=config.preview.port,
++            max_fps=config.preview.max_fps,
++            jpeg_quality=config.preview.jpeg_quality,
++            max_width=config.preview.max_width,
++        )
++    except OSError as exc:
++        logging.getLogger("cv_module.app").warning(
++            "Видео для браузера не поднялось на порту %s: %s", config.preview.port, exc
++        )
++        return None
++    preview.start()
++    return preview
++
++
+ def _parse_source(value: str) -> str | int:
+     return int(value) if value.isdigit() else value
+ 
+diff --git a/src/config.py b/src/config.py
+index 2202d76..fd182b0 100644
+--- a/src/config.py
++++ b/src/config.py
+@@ -92,6 +92,15 @@ class DebugConfig(StrictConfig):
+     show_window: bool = False
+ 
+ 
++class PreviewConfig(StrictConfig):
++    enabled: bool = False
++    host: str = "127.0.0.1"
++    port: int = Field(default=8081, gt=0, lt=65536)
++    max_fps: float = Field(default=15.0, gt=0)
++    jpeg_quality: int = Field(default=75, ge=10, le=100)
++    max_width: int = Field(default=1280, gt=0)
++
++
+ class LoggingConfig(StrictConfig):
+     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+ 
+@@ -105,6 +114,7 @@ class AppConfig(StrictConfig):
+     state_sync: StateSyncConfig = Field(default_factory=StateSyncConfig)
+     transport: TransportConfig
+     debug: DebugConfig = Field(default_factory=DebugConfig)
++    preview: PreviewConfig = Field(default_factory=PreviewConfig)
+     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+ 
+ 
+diff --git a/src/preview.py b/src/preview.py
+new file mode 100644
+index 0000000..6b8d92b
+--- /dev/null
++++ b/src/preview.py
+@@ -0,0 +1,181 @@
++from __future__ import annotations
++
++import json
++import logging
++import threading
++from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
++from time import monotonic
++
++import cv2
++from numpy.typing import NDArray
++
++BOUNDARY = "frame"
++
++
++class PreviewServer:
++    def __init__(
++        self,
++        host: str = "127.0.0.1",
++        port: int = 8081,
++        max_fps: float = 15.0,
++        jpeg_quality: int = 75,
++        max_width: int = 1280,
++    ) -> None:
++        self._logger = logging.getLogger("cv_module.preview")
++        self._min_interval = 1.0 / max_fps
++        self._quality = jpeg_quality
++        self._max_width = max_width
++        self._condition = threading.Condition()
++        self._image: NDArray | None = None
++        self._sequence = 0
++        self._last_publish = 0.0
++        self._encoded: tuple[int, bytes] | None = None
++        self._closed = False
++        self.camera_active = False
++        self._retry = threading.Event()
++        self._server = ThreadingHTTPServer((host, port), self._handler_class())
++        self._server.daemon_threads = True
++        self._thread = threading.Thread(
++            target=self._server.serve_forever, name="cv-preview", daemon=True
++        )
++
++    @property
++    def address(self) -> tuple[str, int]:
++        host, port = self._server.server_address[:2]
++        return str(host), int(port)
++
++    def start(self) -> None:
++        self._thread.start()
++        host, port = self.address
++        self._logger.info("Видео для браузера: http://%s:%s/video", host, port)
++
++    def due(self) -> bool:
++        return monotonic() - self._last_publish >= self._min_interval
++
++    def publish(self, image: NDArray) -> None:
++        self._last_publish = monotonic()
++        with self._condition:
++            self._image = image
++            self._sequence += 1
++            self._condition.notify_all()
++
++    def take_retry(self) -> bool:
++        if self._retry.is_set():
++            self._retry.clear()
++            return True
++        return False
++
++    def close(self) -> None:
++        with self._condition:
++            self._closed = True
++            self._condition.notify_all()
++        if self._thread.is_alive():
++            self._server.shutdown()
++        self._server.server_close()
++
++    def next_jpeg(self, after: int, timeout: float = 2.0) -> tuple[int, bytes] | None:
++        with self._condition:
++            if not self._condition.wait_for(
++                lambda: self._closed or self._sequence > after, timeout=timeout
++            ):
++                return None
++            if self._closed or self._image is None:
++                return None
++            sequence, image = self._sequence, self._image
++            if self._encoded is not None and self._encoded[0] == sequence:
++                return self._encoded
++        jpeg = self._encode(image)
++        if jpeg is None:
++            return None
++        with self._condition:
++            self._encoded = (sequence, jpeg)
++        return sequence, jpeg
++
++    def _encode(self, image: NDArray) -> bytes | None:
++        height, width = image.shape[:2]
++        if width > self._max_width:
++            scale = self._max_width / width
++            image = cv2.resize(image, (self._max_width, int(height * scale)), interpolation=cv2.INTER_AREA)
++        ok, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, self._quality])
++        return buffer.tobytes() if ok else None
++
++    def _handler_class(self) -> type[BaseHTTPRequestHandler]:
++        preview = self
++
++        class Handler(BaseHTTPRequestHandler):
++            def do_GET(self) -> None:
++                path = self.path.split("?", 1)[0]
++                if path == "/video":
++                    self._stream()
++                elif path == "/frame.jpg":
++                    self._single()
++                elif path == "/camera":
++                    self._json({"active": preview.camera_active})
++                else:
++                    self.send_error(404)
++
++            def do_POST(self) -> None:
++                if self.path.split("?", 1)[0] == "/camera/retry":
++                    preview._retry.set()
++                    self._json({"ok": True})
++                else:
++                    self.send_error(404)
++
++            def do_OPTIONS(self) -> None:
++                self.send_response(204)
++                self.send_header("Access-Control-Allow-Origin", "*")
++                self.send_header("Access-Control-Allow-Methods", "GET, POST")
++                self.end_headers()
++
++            def _json(self, payload: dict) -> None:
++                body = json.dumps(payload).encode("utf-8")
++                self.send_response(200)
++                self.send_header("Content-Type", "application/json")
++                self.send_header("Content-Length", str(len(body)))
++                self.send_header("Cache-Control", "no-cache, no-store")
++                self.send_header("Access-Control-Allow-Origin", "*")
++                self.end_headers()
++                self.wfile.write(body)
++
++            def _stream(self) -> None:
++                self.send_response(200)
++                self.send_header("Content-Type", f"multipart/x-mixed-replace; boundary={BOUNDARY}")
++                self.send_header("Cache-Control", "no-cache, no-store")
++                self.send_header("Access-Control-Allow-Origin", "*")
++                self.end_headers()
++                sequence = 0
++                try:
++                    while True:
++                        frame = preview.next_jpeg(sequence)
++                        if frame is None:
++                            if preview._closed:
++                                return
++                            continue
++                        sequence, jpeg = frame
++                        self.wfile.write(
++                            f"--{BOUNDARY}\r\nContent-Type: image/jpeg\r\n"
++                            f"Content-Length: {len(jpeg)}\r\n\r\n".encode("ascii")
++                        )
++                        self.wfile.write(jpeg)
++                        self.wfile.write(b"\r\n")
++                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
++                    return
++
++            def _single(self) -> None:
++                frame = preview.next_jpeg(-1, timeout=0)
++                if frame is None:
++                    self.send_error(503, "no frames yet")
++                    return
++                jpeg = frame[1]
++                self.send_response(200)
++                self.send_header("Content-Type", "image/jpeg")
++                self.send_header("Content-Length", str(len(jpeg)))
++                self.send_header("Cache-Control", "no-cache, no-store")
++                self.send_header("Access-Control-Allow-Origin", "*")
++                self.end_headers()
++                self.wfile.write(jpeg)
++
++            def log_message(self, format: str, *args: object) -> None:
++                return
++
++        return Handler
+diff --git a/tests/test_preview.py b/tests/test_preview.py
+new file mode 100644
+index 0000000..8e5c59c
+--- /dev/null
++++ b/tests/test_preview.py
+@@ -0,0 +1,91 @@
++from __future__ import annotations
++
++import http.client
++import json
++import unittest
++
++import numpy as np
++
++from src.config import PreviewConfig
++from src.preview import BOUNDARY, PreviewServer
++
++
++class PreviewServerTest(unittest.TestCase):
++    def setUp(self) -> None:
++        self.preview = PreviewServer(port=0, max_fps=1000)
++        self.preview.start()
++        self.host, self.port = self.preview.address
++
++    def tearDown(self) -> None:
++        self.preview.close()
++
++    def _get(self, path: str) -> http.client.HTTPResponse:
++        connection = http.client.HTTPConnection(self.host, self.port, timeout=5)
++        self.addCleanup(connection.close)
++        connection.request("GET", path)
++        return connection.getresponse()
++
++    def test_single_frame_before_any_publish_is_unavailable(self) -> None:
++        self.assertEqual(self._get("/frame.jpg").status, 503)
++
++    def test_single_frame_is_jpeg(self) -> None:
++        self.preview.publish(np.zeros((48, 64, 3), dtype=np.uint8))
++        response = self._get("/frame.jpg")
++        self.assertEqual(response.status, 200)
++        self.assertEqual(response.getheader("Content-Type"), "image/jpeg")
++        self.assertTrue(response.read().startswith(b"\xff\xd8"))
++
++    def test_stream_sends_multipart_jpeg(self) -> None:
++        self.preview.publish(np.zeros((48, 64, 3), dtype=np.uint8))
++        response = self._get("/video")
++        self.assertEqual(response.status, 200)
++        self.assertIn(f"boundary={BOUNDARY}", response.getheader("Content-Type"))
++        self.assertEqual(response.readline(), f"--{BOUNDARY}\r\n".encode())
++        self.assertEqual(response.readline(), b"Content-Type: image/jpeg\r\n")
++        length = int(response.readline().split(b":")[1])
++        response.readline()
++        self.assertTrue(response.read(length).startswith(b"\xff\xd8"))
++
++    def test_wide_frames_are_downscaled(self) -> None:
++        preview = PreviewServer(port=0, max_width=320)
++        self.addCleanup(preview.close)
++        jpeg = preview._encode(np.zeros((720, 1280, 3), dtype=np.uint8))
++        import cv2
++
++        decoded = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
++        self.assertEqual(decoded.shape[:2], (180, 320))
++
++    def test_unknown_path_is_404(self) -> None:
++        self.assertEqual(self._get("/nope").status, 404)
++
++    def test_camera_state(self) -> None:
++        response = self._get("/camera")
++        self.assertEqual(response.getheader("Access-Control-Allow-Origin"), "*")
++        self.assertEqual(json.loads(response.read()), {"active": False})
++        self.preview.camera_active = True
++        self.assertEqual(json.loads(self._get("/camera").read()), {"active": True})
++
++    def test_retry_is_taken_once(self) -> None:
++        self.assertFalse(self.preview.take_retry())
++        connection = http.client.HTTPConnection(self.host, self.port, timeout=5)
++        self.addCleanup(connection.close)
++        connection.request("POST", "/camera/retry")
++        self.assertEqual(connection.getresponse().status, 200)
++        self.assertTrue(self.preview.take_retry())
++        self.assertFalse(self.preview.take_retry())
++
++    def test_throttles_by_max_fps(self) -> None:
++        preview = PreviewServer(port=0, max_fps=1)
++        self.addCleanup(preview.close)
++        self.assertTrue(preview.due())
++        preview.publish(np.zeros((8, 8, 3), dtype=np.uint8))
++        self.assertFalse(preview.due())
++
++
++class PreviewConfigTest(unittest.TestCase):
++    def test_disabled_by_default(self) -> None:
++        self.assertFalse(PreviewConfig().enabled)
++
++
++if __name__ == "__main__":
++    unittest.main()

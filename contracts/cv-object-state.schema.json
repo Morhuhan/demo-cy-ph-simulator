@@ -1,0 +1,178 @@
+{
+  "$defs": {
+    "ObservationStatus": {
+      "description": "Статус наблюдения по техническому описанию CV-модуля от 08.09.2026.",
+      "enum": [
+        "RECOGNIZED",
+        "UNCLEAR",
+        "NOT_VISIBLE",
+        "NO_DATA"
+      ],
+      "title": "ObservationStatus",
+      "type": "string"
+    }
+  },
+  "description": "Событие CV-модуля о состоянии объекта, как оно приходит на сокет /cv. Это контракт смежника, а не внутренний: он описывает то, что стенд принимает от модуля распознавания.",
+  "properties": {
+    "camera_id": {
+      "minLength": 1,
+      "title": "Camera Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "event_type": {
+      "const": "object_state",
+      "enum": [
+        "object_state"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "object": {
+      "description": "Что наблюдается: 'helmet' и т.п.",
+      "minLength": 1,
+      "title": "Object",
+      "type": "string"
+    },
+    "subject_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "К кому относится состояние. Идентификатор трека, не человека.",
+      "examples": [
+        "person-1"
+      ],
+      "title": "Subject Id"
+    },
+    "state": {
+      "examples": [
+        "on",
+        "off"
+      ],
+      "minLength": 1,
+      "title": "State",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "observation_status": {
+      "$ref": "#/$defs/ObservationStatus"
+    },
+    "model_version": {
+      "minLength": 1,
+      "title": "Model Version",
+      "type": "string"
+    },
+    "bbox": {
+      "anyOf": [
+        {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bbox"
+    },
+    "frame_ts": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Время кадра меткой времени, если источник шлёт его так.",
+      "title": "Frame Ts"
+    },
+    "frame_width": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Ширина кадра в пикселях. По ней пиксельная рамка приводится к долям кадра.",
+      "title": "Frame Width"
+    },
+    "frame_height": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Высота кадра в пикселях.",
+      "title": "Frame Height"
+    },
+    "frame_timestamp_sec": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Положение кадра от начала съёмки, в секундах. Именно так время кадра передаёт CV-модуль. Смещение, а не метка времени: у записи нет общего с нами календаря, есть только собственный отсчёт.",
+      "title": "Frame Timestamp Sec"
+    }
+  },
+  "required": [
+    "camera_id",
+    "timestamp",
+    "event_type",
+    "object",
+    "state",
+    "confidence",
+    "observation_status",
+    "model_version"
+  ],
+  "title": "cv-object-state",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

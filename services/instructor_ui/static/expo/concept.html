@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Рабочее место инструктора: прототип</title>
+<link rel="icon" href="logo-mark.svg">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+<style>
+/* Стиль экрана тренажёра /expo: тёмные карточки, бирюзовый акцент. */
+:root{--bg:#0d1114;--panel:#161c21;--panel-2:#1d252c;--line:#2a343d;--text:#e8eef2;--muted:#8a99a5;--accent:#19b5ad;
+  --ok:#2ecc71;--bad:#ff4d4f;--warn:#ffb020;--glass:rgba(13,17,20,.84)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+body{color:var(--text);font:400 16px/1.35 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0;text-align:left}
+svg.i{width:1em;height:1em;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;background:var(--bg)}
+#group{position:absolute;overflow:hidden;background:#000}
+#group.card{border-radius:10px;border:1px solid var(--line)}
+#scene3d{position:absolute;inset:0}
+#scene3d canvas{display:block;width:100%;height:100%}
+#gs{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;pointer-events:none;color:var(--text)}
+#ui{position:absolute;inset:0;pointer-events:none}
+#ui>*{pointer-events:auto}
+#camv{position:absolute;z-index:2;left:1417px;top:89px;width:478px;height:360px;object-fit:contain;background:#050708;border-radius:9px 9px 0 0;display:none}
+.logo{display:flex;align-items:center;gap:12px;flex:none}
+.logo img{width:54px;height:54px;display:block}
+.logo b{display:block;font-size:30px;font-weight:700;line-height:1;letter-spacing:.01em;color:var(--text)}
+.logo span{display:block;font-size:15px;font-weight:700;color:#ef5a3c;margin-top:3px}
+.pnl{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.cap{font-size:14px;letter-spacing:.14em;color:var(--accent);font-weight:700;text-transform:uppercase}
+.n{width:40px;height:40px;border-radius:50%;background:var(--panel-2);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--accent);font-weight:600;flex:none}
+.warn{background:#3a2225;color:#ffd6d6;border-radius:10px;padding:12px 16px;font-size:17px;line-height:1.35;margin-bottom:18px}
+.warn b{display:block;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#ff9a9b;margin-bottom:4px}
+
+/* сцена: строка этапа, подпись на узле, вопрос и затемнение поверх сцены */
+.ttl{position:absolute;left:24px;top:24px;padding:12px 22px;border-radius:8px;background:var(--glass);display:flex;align-items:baseline;gap:16px;font-size:30px;line-height:1.1;white-space:nowrap}
+.ttl span{color:var(--muted);font-size:22px;letter-spacing:.08em;text-transform:uppercase}
+.ttl b{font-weight:600}
+.qb{position:absolute;left:24px;right:24px;bottom:24px;height:300px;display:grid;grid-template-columns:600px repeat(3,1fr);gap:16px}
+.qb>div{padding:26px 28px;border-radius:12px;display:flex;flex-direction:column;background:var(--glass);border:2px solid var(--line)}
+.qq{justify-content:center}
+.qq b{font-size:40px;line-height:1.15;font-weight:600}
+.qo{font-size:30px;line-height:1.25}
+.qo b{width:60px;height:60px;border-radius:50%;background:var(--panel-2);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:30px;margin-bottom:18px}
+.qo.ok{border-color:var(--ok);background:rgba(18,48,33,.92)}.qo.ok b{background:var(--ok);color:#001}
+.qo.no{color:var(--muted)}
+.blank{position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px}
+.blank .bt{font-size:64px;font-weight:600;line-height:1}
+.blank .bt i{font-style:normal;color:var(--accent)}
+.blank .bar{width:420px;height:6px;border-radius:3px;background:var(--accent);opacity:.6}
+#pin{position:absolute;display:none;align-items:center;transform:translate(-14px,-14px)}
+#pin.l{flex-direction:row-reverse;transform:translate(calc(-100% + 14px),-14px)}
+#pin i{width:28px;height:28px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 7px rgba(25,181,173,.3),0 0 24px rgba(25,181,173,.6);display:block;flex:none}
+#pin span{margin:0 14px;background:var(--glass);border:1px solid var(--accent);color:var(--text);padding:8px 16px;font-size:28px;border-radius:6px;font-weight:600;white-space:nowrap}
+
+/* пульт инструктора */
+.a-top{position:absolute;left:24px;right:24px;top:16px;height:60px;display:flex;align-items:center;gap:24px}
+.a-top .les{font-size:22px;font-weight:600;white-space:nowrap;padding-left:24px;border-left:1px solid var(--line);flex:1}
+.a-modes{display:flex;gap:4px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.a-modes button{padding:8px 18px;font-size:16px;border-radius:5px;color:var(--muted)}
+.a-modes button.on{background:var(--accent);color:#001;font-weight:700}
+.a-open{display:flex;align-items:center;gap:8px;padding:9px 14px;border-radius:8px;border:1px solid var(--line);font-size:15px;color:var(--muted)}
+.a-open:hover{border-color:var(--accent);color:var(--text)}
+.a-open i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.a-open.on{color:var(--text)}.a-open.on i{background:var(--ok)}
+.a-time{font-size:22px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.a-left{position:absolute;left:24px;top:88px;width:240px;bottom:24px;display:flex;flex-direction:column;overflow:hidden}
+.a-tabs{display:flex;height:56px;border-bottom:1px solid var(--line);flex:none;padding:0 6px}
+.a-tabs button{flex:none;padding:0 10px;font-size:15px;color:var(--muted)}
+.a-tabs button.on{color:var(--text);font-weight:600;box-shadow:inset 0 -3px 0 var(--accent)}
+.a-rows{padding:10px;display:flex;flex-direction:column;gap:8px}
+.a-row{display:grid;grid-template-columns:40px 1fr 18px;gap:12px;align-items:center;width:100%;min-height:84px;padding:10px 10px 10px 12px;border-radius:10px;border:2px solid transparent;font-size:16px;line-height:1.2}
+.a-row:hover{border-color:var(--line)}
+.a-row.on{border-color:var(--accent);background:rgba(25,181,173,.1);font-weight:600}
+.a-row.on .n{background:var(--accent);color:#001}
+.a-row.done{color:var(--muted)}.a-row.done svg{color:var(--ok)}
+.a-row.sm{min-height:56px;grid-template-columns:1fr}
+.a-deck{position:absolute;left:280px;top:734px;width:1120px;height:322px;display:flex;flex-direction:column;gap:16px}
+.a-tr{display:grid;grid-template-columns:220px 1fr 220px;height:120px;gap:16px}
+.a-tr.two{grid-template-columns:300px 1fr}
+.a-tr button{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:0 26px;font-size:22px;display:flex;align-items:center;gap:12px;font-weight:600}
+.a-tr button:hover{border-color:#3d4a55}
+.a-tr button svg{font-size:28px}
+.a-tr button.main{background:var(--accent);border-color:var(--accent);color:#001;font-size:26px;font-weight:700;justify-content:center}
+.a-tr button.main.stop{background:var(--bad);border-color:var(--bad);color:#fff}
+.a-tr button:disabled{color:#3d4a55;cursor:default}
+.a-tr button.main:disabled{background:var(--panel-2);border-color:var(--line);color:var(--muted)}
+.a-tools{flex:1;display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.a-tools.four{grid-template-columns:repeat(4,1fr)}
+.a-tools button,.a-tools div.tile{background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;justify-content:space-between;font-size:16px;line-height:1.2;color:var(--muted)}
+.a-tools button:hover{border-color:#3d4a55}
+.a-tools svg{font-size:30px;color:var(--text)}
+.a-tools button.on{border-color:var(--accent);background:rgba(25,181,173,.1);color:var(--text);font-weight:600}
+.a-tools button.on svg{color:var(--accent)}
+.a-tools .tile-n{font-weight:700;font-size:44px;line-height:1;color:var(--text)}
+.a-tools .tile-n.bad{color:var(--bad)}
+.a-tools div.tile.ok{border-color:rgba(46,204,113,.6);color:var(--ok);font-weight:600}.a-tools div.tile.ok svg{color:var(--ok)}
+.a-tools div.tile.stop{background:var(--bad);border-color:var(--bad);color:#fff;font-weight:700;font-size:18px}.a-tools div.tile.stop svg{color:#fff}
+.a-right{position:absolute;left:1416px;top:88px;width:480px;bottom:24px;padding:20px;display:flex;flex-direction:column;overflow:hidden}
+.a-right .cap{margin-bottom:10px}
+.a-right p{font-size:19px;line-height:1.4;margin:0 0 20px}
+.a-q{border-top:1px solid var(--line);padding-top:16px;margin-top:auto}
+.a-q .qt{font-size:19px;font-weight:600;margin-bottom:10px;line-height:1.25}
+.a-q .op{display:grid;grid-template-columns:28px 1fr 24px;font-size:16px;line-height:1.3;padding:8px 0;border-top:1px solid var(--line);color:var(--muted)}
+.a-q .op span:first-child{color:var(--accent);font-weight:600}
+.a-q .op.ok{color:var(--text)}
+.a-q .op .c{font-size:20px;color:var(--ok)}
+.a-q .acts{display:flex;gap:8px;margin-top:12px}
+.a-q .acts button{flex:1;height:56px;padding:0 16px;font-weight:600;font-size:16px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);text-align:center}
+.a-q .acts button:hover{border-color:var(--accent)}
+.a-q .acts button.p{background:var(--accent);border-color:var(--accent);color:#001;font-weight:700}
+.a-q .acts button:disabled{color:#3d4a55;cursor:default}
+.cam{height:360px;margin:-20px -20px 14px;flex:none;border-bottom:1px solid var(--line)}
+.lg-row{display:grid;grid-template-columns:62px 1fr;font-size:16px;line-height:1.35;padding:9px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.lg-row>span:first-child{color:var(--muted)}
+.lg-row.bad{background:#3a2225;color:#ffd6d6;border-radius:8px;border-top-color:transparent;padding-left:10px;padding-right:10px;margin:4px 0}
+.res{margin-top:auto;padding:18px 20px;border-radius:10px;border:2px solid var(--ok);background:rgba(46,204,113,.1)}
+.res.bad{border-color:var(--bad);background:rgba(255,77,79,.1)}
+.res b{display:block;font-size:32px;line-height:1.05;letter-spacing:.04em;text-transform:uppercase;color:var(--ok);margin-bottom:6px}
+.res.bad b{color:var(--bad)}
+.res span{font-size:17px;color:var(--muted)}
+
+/* экран обучаемых: раскладка экрана тренажёра */
+.modeline{font-size:16px;font-weight:600;white-space:nowrap}
+.modeline::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:8px;vertical-align:2px}
+.progress{display:flex;gap:6px}
+.progress i{width:46px;height:8px;border-radius:4px;background:var(--line)}
+.progress i.done{background:var(--ok)}.progress i.cur{background:var(--accent)}
+.clock{font-variant-numeric:tabular-nums;font-size:22px;color:var(--muted);min-width:70px;text-align:right}
+.t-bot{position:absolute;left:24px;top:795px;width:1228px;bottom:24px}
+.t-bot h2{margin:0 0 12px;font-size:26px;font-weight:600;line-height:1.2}
+.t-bot h2 small{color:var(--accent);font-size:15px;letter-spacing:.12em;font-weight:700;margin-right:12px;vertical-align:3px;text-transform:uppercase}
+.t-bot p{margin:0;font-size:20px;line-height:1.45;color:var(--muted);max-width:1180px}
+.t-bot .wait{font-size:22px;color:var(--muted);padding-top:18px}
+.t-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.opt{position:relative;display:flex;align-items:flex-start;min-height:156px;padding:18px 20px 18px 74px;border-radius:10px;background:var(--panel);border:2px solid var(--line);font-size:21px;line-height:1.3;color:var(--text);transition:border-color .15s,background .15s}
+button.opt:hover:not(:disabled){border-color:#3d4a55}
+button.opt:disabled{cursor:default}
+.opt b{position:absolute;left:18px;top:18px;width:40px;height:40px;border-radius:50%;background:var(--panel-2);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--accent)}
+.opt.ok{border-color:var(--ok);background:rgba(46,204,113,.1)}.opt.ok b{background:var(--ok);color:#001}
+.opt.bad{border-color:var(--bad);background:rgba(255,77,79,.1)}
+.opt.no{color:var(--muted)}
+#tcam{position:absolute;left:1276px;top:88px;width:620px;height:349px;border-radius:10px;overflow:hidden;background:#050708;border:1px solid var(--line);display:none}
+#tcam img{width:100%;height:100%;object-fit:contain;display:block}
+#tcam [hidden]{display:none!important}
+#tcam .nocam{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:18px}
+#tchips{position:absolute;left:12px;bottom:12px;display:flex;gap:8px}
+.chip{padding:6px 12px;border-radius:14px;background:var(--glass);font-size:15px;font-weight:600;display:flex;align-items:center;gap:6px}
+.chip.ok{color:var(--ok)}.chip.bad{background:var(--bad);color:#fff}
+#ui>.t-flash{position:absolute;left:24px;top:170px;width:1228px;height:230px;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.t-flash div{padding:22px 40px;border-radius:10px;font-size:34px;font-weight:700;letter-spacing:.04em;text-align:center;background:rgba(0,0,0,.8);max-width:1000px}
+.t-flash.ok div{color:var(--ok);border:2px solid var(--ok)}
+.t-flash.bad div{color:var(--bad);border:2px solid var(--bad);box-shadow:0 0 40px rgba(255,77,79,.35)}
+.t-flash div small{display:block;font-size:19px;font-weight:500;color:var(--text);margin-top:8px;letter-spacing:0;line-height:1.35}
+.t-layer{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:rgba(8,10,12,.86)}
+.t-layer.blank{background:var(--bg)}
+.t-layer .card{padding:40px 72px;border-radius:14px;background:var(--panel);border:2px solid var(--warn);text-align:center}
+.t-layer .card.bad{border-color:var(--bad)}
+.t-layer .card b{display:block;font-size:40px;letter-spacing:.06em;color:var(--warn)}
+.t-layer .card.bad b{color:var(--bad)}
+.t-layer .card p{margin:14px 0 0;font-size:22px;color:var(--muted)}
+.sheet{width:980px;padding:48px 60px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+.sheet h1{margin:0 0 8px;font-size:40px}
+.sheet .sub{color:var(--muted);font-size:20px;margin-bottom:30px}
+.sheet table{width:100%;border-collapse:collapse;font-size:26px}
+.sheet td{padding:14px 0;border-bottom:1px solid var(--line)}
+.sheet td:last-child{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.sheet td.ok{color:var(--ok)}.sheet td.bad{color:var(--bad)}
+.a-q .op.bad{color:var(--bad)}
+
+/* ИИ-наставник на экране обучаемого — как на экране тренажёра */
+#tmentor{position:absolute;left:1276px;top:453px;width:620px;bottom:24px;display:none;flex-direction:column;min-height:0}
+#tmentor .head{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+#tmentor .head .cap{flex:1}
+#mic{width:56px;height:56px;border-radius:50%;border:2px solid var(--accent);background:var(--panel-2);color:var(--text);display:flex;align-items:center;justify-content:center;flex:none}
+#mic svg{width:26px;height:26px}
+#mic.on{background:var(--accent);color:#000;box-shadow:0 0 0 8px rgba(25,181,173,.25)}
+#micLevel{width:120px;height:8px;border-radius:4px;background:var(--line);overflow:hidden;opacity:0;transition:opacity .2s}
+#micLevel.show{opacity:1}
+#micLevel i{display:block;height:100%;width:0;background:var(--ok);transition:width .08s}
+#heard{font-size:15px;color:var(--muted);min-height:20px;padding:0 16px;margin-top:8px}
+#heard:empty{min-height:0;margin:0}
+#chat{flex:1;overflow-y:auto;padding:8px 16px 12px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.msg{padding:10px 15px;border-radius:16px;font-size:18px;line-height:1.4;max-width:86%}
+.msg.ai{align-self:flex-start;background:#212a31;border-top-left-radius:4px}
+.msg.ai.bad{background:#3a2225;color:#ffd6d6}
+.msg.ai.think{color:var(--muted);font-style:italic}
+.msg.me{align-self:flex-end;background:#135c58;color:#eafaf8;border-top-right-radius:4px}
+#quick{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--line)}
+#quick:empty{display:none}
+#quick button{padding:8px 12px;border-radius:18px;border:1px solid var(--line);background:var(--panel-2);font-size:15px}
+#quick button:hover{border-color:var(--accent)}
+#tmentor .microw{display:flex;align-items:center;gap:8px;padding:8px 16px 10px;font-size:13px;color:var(--muted)}
+#micSelect{flex:1;min-width:0;padding:4px 6px;border-radius:5px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font:inherit}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="group"><div id="scene3d"></div><div id="gs"></div></div>
+  <video id="camv" muted playsinline></video>
+  <div id="tcam"><img id="tcamImg" alt="" hidden><div class="nocam" id="tnocam">Камера не подключена</div><div id="tchips"></div></div>
+  <div id="tmentor" class="pnl">
+    <div class="head">
+      <span class="cap">ИИ-наставник</span>
+      <div id="micLevel" title="Уровень звука микрофона"><i></i></div>
+      <button id="mic" title="Удерживайте, чтобы спросить (пробел)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    </div>
+    <div id="heard"></div>
+    <div id="chat"></div>
+    <div id="quick"></div>
+    <div class="microw">Микрофон <select id="micSelect"></select></div>
+  </div>
+  <div id="ui"></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { createScene } from './scene3d.js';
+import { LESSONS, TOP_FILL_STEPS as STEPS } from './lessons.js';
+
+// Прототип: пульт инструктора (вариант А) и экран обучаемых (?screen=trainee).
+// Экраны связаны через BroadcastChannel, поэтому открываются в одном браузере.
+// К пульту /expo/instructor и журналу не подключён.
+const PARAMS = new URLSearchParams(location.search);
+const ROLE = PARAMS.get('screen') === 'trainee' ? 'trainee' : 'console';
+const MINT = 0x19e3d6, ORANGE = 0xff3b3b;   // подсветка как на экране тренажёра
+const $ = (id) => document.getElementById(id);
+const NODES = LESSONS[0].equipment;
+const STEP_PART = ['grounding', 'hatch', 'boom', 'clamp', 'winch'];
+const STEP_PIN = ['Заземление', 'Крышка люка', 'Шарнирный трубопровод', 'Механизм прижатия', 'Лебёдка'];
+const OPS = ['grounding', 'hatch', 'install', 'clamp', 'bottom'];
+const MODES = { review:'Обзор', training:'Обучение', exam:'Экзамен' };
+const LESSON = 'Верхний налив ЛВЖ';
+const PPE_WARN = 'Внимание. Каска больше не обнаружена. Обнаружено несоответствие требованиям СИЗ, продолжение сценария заблокировано.';
+const PPE_OK = 'Требование восстановлено. Продолжаем.';
+const ABSENT_MS = 6000;
+const VIDEO_URL = PARAMS.get('video') || `http://${location.hostname || '127.0.0.1'}:8081/video`;
+
+const ICONS = {
+  left:'<path d="M19 12H5M11 6l-6 6 6 6"/>', right:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  play:'<path d="M7 4.5v15l12-7.5z"/>', pause:'<path d="M8 5v14M16 5v14"/>',
+  stop:'<rect x="6" y="6" width="12" height="12" rx="1"/>',
+  orbit:'<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 3v4h-4"/>',
+  eye:'<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  layers:'<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+  tag:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.2"/>',
+  freeze:'<rect x="4" y="5" width="16" height="12" rx="1"/><path d="M10 9v4M14 9v4M8 21h8"/>',
+  off:'<rect x="4" y="5" width="16" height="12" rx="1"/><path d="M3 3l18 18M8 21h8"/>',
+  check:'<path d="M4 12.5l5.5 5.5L20 6.5"/>', alert:'<path d="M12 4l9.5 16h-19z"/><path d="M12 10v4.5M12 17.5h.01"/>',
+  mic:'<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  screen:'<rect x="3" y="4" width="18" height="12" rx="1"/><path d="M8 20h8M12 16v4"/>'
+};
+const I = (k) => `<svg class="i" viewBox="0 0 24 24">${ICONS[k]}</svg>`;
+const BRAND = '<div class="logo"><img src="logo-mark.svg" alt=""><div><b>Mentrica</b><span>ИИ-наставник</span></div></div>';
+
+const S = { surface:'console', intro:true, step:0, node:null, tab:'steps', mode:'review', q:false, reveal:false, blank:false,
+  freeze:false, view:'orbit', xray:false, labels:true, mentor:true, busy:false, done:0, exam:null, flash:null, wrong:null, ready:false };
+window.S = S;
+const RECT = { console:[280,88,1120,630], full:[0,0,1920,1080], trainee:[24,88,1228,690.75] };
+placeGroup();   // сцена стартует уже в своей рамке
+
+// --- связь пульта и экрана обучаемых ---------------------------------------------
+// Через стенд (/expo/concept/live), если он есть; без стенда — внутри одного браузера.
+const bc = new BroadcastChannel('mentrica-instructor-a');
+let live = null;
+const send = (m) => { if (live && live.readyState === 1) live.send(JSON.stringify(m)); else bc.postMessage(m); };
+function connectLive() {
+  const s = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/expo/concept/live`);
+  // пульт главный: при подключении присылает своё состояние, экран обучаемых под него подстраивается
+  s.onopen = () => { live = s; send(ROLE === 'trainee' ? { hello:1 } : { sync:snapshot() }); };
+  s.onmessage = (e) => onMessage(JSON.parse(e.data));
+  s.onclose = () => { if (live === s) live = null; setTimeout(connectLive, 5000); };
+}
+let peerAt = 0;   // когда пульт последний раз слышал экран обучаемых
+const peerAlive = () => Date.now() - peerAt < 5000;
+const LOCAL_ONLY = new Set(['tab', 'open', 'noop', 'pick']);
+
+// --- голос: тот же Silero стенда. Если экран обучаемых открыт, говорит он ----------
+const player = new Audio();
+const voiceCache = new Map();
+function fetchVoice(text) {
+  if (!voiceCache.has(text)) {
+    voiceCache.set(text, fetch('/voice/say', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ text }) })
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.blob(); }).then((b) => URL.createObjectURL(b)));
+  }
+  return voiceCache.get(text);
+}
+let speechSeq = 0, lastSaid = '';
+function stopSpeech() { speechSeq++; player.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+function browserSay(text) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ru-RU'; u.rate = 1.05;
+  const v = speechSynthesis.getVoices().find((x) => x.lang && x.lang.toLowerCase().startsWith('ru'));
+  if (v) u.voice = v;
+  speechSynthesis.speak(u);
+}
+// Длинный ответ звучит по предложениям: первое уже играет, пока синтезируются следующие.
+function sentences(text) {
+  const parts = text.match(/[^.!?…]+[.!?…]+["»]?|[^.!?…]+$/g) || [text];
+  const out = [];
+  for (const p of parts.map((x) => x.trim()).filter(Boolean)) {
+    if (out.length && out[out.length - 1].length < 25) out[out.length - 1] += ' ' + p;
+    else out.push(p);
+  }
+  return out;
+}
+function playUrl(url) {
+  return new Promise((resolve, reject) => { player.onended = resolve; player.onerror = reject; player.src = url; player.play().catch(reject); });
+}
+// На экране обучаемого каждая реплика ещё и пишется в чат наставника.
+async function say(text, force = false, cls = '') {
+  if (!S.mentor && !force) return;
+  if (ROLE === 'console' && peerAlive()) return;
+  if (ROLE === 'trainee') { lastSaid = text; addMsg(text, 'ai' + (cls ? ' ' + cls : '')); }
+  stopSpeech();
+  const seq = speechSeq, parts = sentences(text);
+  const audio = parts.map((p, i) => (i < 2 ? fetchVoice(p) : null));
+  let i = 0;
+  try {
+    for (; i < parts.length; i++) {
+      const url = await (audio[i] || fetchVoice(parts[i]));
+      if (i + 2 < parts.length && !audio[i + 2]) audio[i + 2] = fetchVoice(parts[i + 2]);
+      if (seq !== speechSeq) return;
+      await playUrl(url);
+      if (seq !== speechSeq) return;
+    }
+  } catch (_) {
+    if (seq === speechSeq && voiceServer) browserSay(parts.slice(i).join(' '));   // браузер договаривает
+  }
+}
+let voiceServer = false;   // стенд отвечает: если его синтез отказал, договаривает браузер; без стенда молчим
+function addMsg(text, cls) {
+  const chat = $('chat');
+  const d = document.createElement('div');
+  d.className = 'msg ' + cls;
+  d.textContent = text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+
+// --- сцена ----------------------------------------------------------------------
+const S3 = await createScene($('scene3d'), 'models/');
+window.S3 = S3;
+S3.anim.park();
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function opBody(i, show) {
+  if (i === 4 && show) { S3.focus('pipe', MINT); await pause(700); }
+  await S3.anim[OPS[i]]();
+  if (show && i === 0) S3.focus('lamp', MINT);
+  if (show && i === 2) S3.focus('pipe', MINT, false);
+}
+// Сцена приводится к состоянию «выполнено n операций»; назад — с начала и мгновенно.
+async function syncOps(n) {
+  if (n === S.done) return;
+  if (n < S.done) { S3.anim.reset(); S3.anim.park(); S.done = 0; }
+  S3.speed(100000);
+  for (let i = S.done; i < n; i++) await opBody(i, false);
+  S3.speed(1);
+  S.done = n;
+  if (S.xray) S3.xray(true);
+}
+async function runOp(i, show = true) {
+  S.busy = true; render();
+  await syncOps(i);
+  await opBody(i, show);
+  S.done = i + 1; S.busy = false; render();
+}
+function unfreeze() { if (S.freeze) { S.freeze = false; S3.resume(); } }
+async function goStep(i) {
+  i = Math.max(0, Math.min(STEPS.length - 1, i));
+  stopSpeech(); unfreeze();
+  S.intro = false; S.step = i; S.node = null; S.q = false; S.reveal = false; S.blank = false; S.wrong = null;
+  await syncOps(Math.min(S.done, i));
+  S3.focus(STEP_PART[i], MINT);
+  render();
+}
+function show(voice = true) {
+  if (S.busy) return;
+  unfreeze();
+  S.intro = false;
+  if (voice) say(STEPS[S.step].why);
+  runOp(S.step);
+}
+function goNode(part) {
+  stopSpeech(); unfreeze();
+  if (S.node === part) { S.node = null; S3.focus(STEP_PART[S.step], MINT); render(); return; }
+  const n = NODES.find((x) => x.part === part);
+  S.intro = false; S.node = part; S.q = false; S.reveal = false; S.blank = false;
+  S3.focus(part, MINT); render();
+  say(n.text);
+}
+function toggleQ() { stopSpeech(); S.q = !S.q; S.reveal = false; S.wrong = null; S.node = null; S.blank = false; S.intro = false; render(); }
+function reveal() {
+  if (!S.q) return;
+  S.reveal = !S.reveal; render();
+  if (S.reveal) say(STEPS[S.step].success);
+}
+// Обучение: на выведенный вопрос отвечает сам обучаемый, инструктор видит ответ на пульте.
+function trainAnswer(i, idx, remote = false) {
+  if (S.mode !== 'training' || !S.q || S.reveal || i !== S.step) return;
+  if (!remote) send({ train:[i, idx] });
+  const st = STEPS[i], o = st.options[idx];
+  if (o.ok) { S.wrong = null; S.reveal = true; S3.focus(STEP_PART[i], MINT); render(); if (ROLE === 'trainee') flash(true, 'ВЕРНО'); say(st.success, true); }
+  else { S.wrong = idx; S3.focus(STEP_PART[i], ORANGE); render(); if (ROLE === 'trainee') flash(false, 'НЕВЕРНО', o.err); say(o.err, true, 'bad'); }
+}
+let flashTimer = 0;
+function flash(ok, text, small = '') {
+  S.flash = { ok, text, small }; render();
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { S.flash = null; render(); }, ok ? 1600 : 3200);
+}
+
+// --- камера: подтверждённое состояние каски со стенда ----------------------------
+const HELMET = { cv:null, lastObsAt:0 };
+const helmetNow = () => ({ present: Date.now() - HELMET.lastObsAt < ABSENT_MS || HELMET.cv !== null, helmet: HELMET.cv === 'on' });
+function connectStand() {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  ws.onmessage = (m) => {
+    const { type, payload } = JSON.parse(m.data);
+    if (type === 'snapshot') {
+      const v = payload.observed_state && payload.observed_state.helmet;
+      if (v !== undefined) HELMET.cv = v === 'on' || v === 'off' ? v : null;
+    } else if (type === 'observation' && payload.variable === 'helmet') {
+      if (!payload.unclear) HELMET.lastObsAt = Date.now();
+    } else if (type === 'state' && payload.variable === 'helmet') {
+      HELMET.cv = payload.quality === 'confirmed' ? payload.value : null;
+      examHelmet();
+    }
+  };
+  ws.onclose = () => setTimeout(connectStand, 3000);
+}
+connectStand();
+
+// Видео с модуля распознавания, как на экране тренажёра.
+let camRetry = 0;
+function connectCam() {
+  clearTimeout(camRetry);
+  const img = $('tcamImg');
+  img.onload = () => { img.hidden = false; $('tnocam').style.display = 'none'; };
+  img.onerror = () => { img.hidden = true; $('tnocam').style.display = ''; camRetry = setTimeout(connectCam, 3000); };
+  img.src = `${VIDEO_URL}${VIDEO_URL.includes('?') ? '&' : '?'}t=${Date.now()}`;
+}
+
+// --- экзамен: отвечает обучаемый на своём экране, инструктор наблюдает на пульте ----
+const clock = () => { const E = S.exam, s = Math.floor((Date.now() - E.t0 - E.lost) / 1000); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+function examStart() {
+  stopSpeech(); unfreeze();
+  S.mode = 'exam'; S.intro = false; S.q = false; S.reveal = false; S.node = null; S.blank = false; S.xray = false; S.tab = 'steps';
+  S.exam = { t0:Date.now(), lost:0, stoppedAt:0, errors:0, ppe:0, log:[], state:'run', passed:null, stepsDone:0, wrong:null };
+  S3.clear(); syncOps(0); S3.xray(false); S.step = 0; S3.view(STEP_PART[0]);
+  render();
+}
+// Ответ обучаемого: idx — номер выбранного варианта. Уходит на второй экран.
+function examAnswer(i, idx, remote = false) {
+  const E = S.exam;
+  if (S.mode !== 'exam' || !E || E.state !== 'run' || (!remote && S.busy)) return Promise.resolve();
+  if (!remote) send({ exam:[i, idx] });
+  return examStep(i, idx);
+}
+async function examStep(i, idx) {
+  const E = S.exam, st = STEPS[i], o = st.options[idx];
+  if (!o.ok) {
+    E.errors++; E.wrong = idx;
+    E.log.push({ t:clock(), bad:true, html:`<b>Ошибка на этапе ${i + 1}.</b> ${o.err}` });
+    S3.focus(STEP_PART[i], ORANGE);
+    if (ROLE === 'trainee') flash(false, 'ОШИБКА', o.err);
+    say(o.err, true, 'bad');
+    render();
+    return;
+  }
+  E.wrong = null;
+  if (ROLE === 'trainee') flash(true, 'ВЕРНО');
+  say(st.success, true);
+  S3.clear(); S.step = i; S3.view(STEP_PART[i]); render();
+  await pause(1300);
+  await runOp(i, false);
+  E.stepsDone = i + 1;
+  E.log.push({ t:clock(), html:st.title });
+  if (i === STEPS.length - 1) examFinish();
+  else { S.step = i + 1; render(); }
+}
+function examFinish() {
+  const E = S.exam;
+  if (!E || E.state === 'done') return;
+  E.state = 'done'; E.passed = !E.errors && !E.ppe && E.stepsDone === STEPS.length; E.final = clock();
+  render();
+}
+function examHelmet() {
+  const E = S.exam;
+  if (S.mode !== 'exam' || !E) { render(); return; }
+  if (E.state === 'run' && HELMET.cv === 'off') {
+    E.state = 'ppe'; E.ppe++; E.stoppedAt = Date.now();
+    E.log.push({ t:clock(), bad:true, html:'<b>Нарушение СИЗ.</b> Каска снята, экзамен остановлен.' });
+    S3.pause(); say(PPE_WARN, true, 'bad');
+  } else if (E.state === 'ppe' && HELMET.cv === 'on') {
+    E.lost += Date.now() - E.stoppedAt; E.state = 'run';
+    E.log.push({ t:clock(), html:'Каска надета, экзамен продолжен' });
+    S3.resume(); say(PPE_OK, true);
+  }
+  render();
+}
+function examPause() {
+  const E = S.exam;
+  if (E.state === 'run') { E.state = 'pause'; E.stoppedAt = Date.now(); S3.pause(); }
+  else if (E.state === 'pause') { E.lost += Date.now() - E.stoppedAt; E.state = 'run'; S3.resume(); }
+  render();
+}
+
+// --- отображение: сцена ------------------------------------------------------------
+const nodeOf = (p) => NODES.find((n) => n.part === p);
+function groupLayer() {
+  const trainee = ROLE === 'trainee', exam = S.mode === 'exam';
+  if (S.blank && !trainee) return `<div class="blank"><div class="bt">Смотрим <i>на инструктора</i></div><div class="bar"></div></div>`;
+  const st = STEPS[S.step], nd = S.node && nodeOf(S.node);
+  // на экзамене название этапа не показываем: оно подсказывает ответ
+  const title = exam ? `<span>Экзамен</span><b>Этап ${S.step + 1} из ${STEPS.length}</b>`
+    : S.intro ? `<b>${LESSON}</b>` : nd ? `<b>${nd.title}</b>`
+    : `<span>Этап ${S.step + 1} из ${STEPS.length}</span><b>${st.title}</b>`;
+  if (S.q && !trainee) {
+    const ops = st.options.map((o, i) => `<div class="qo ${S.reveal ? (o.ok ? 'ok' : 'no') : ''}"><b>${i + 1}</b>${o.t}</div>`).join('');
+    return `<div class="ttl">${title}</div><div class="qb"><div class="qq"><b>${st.q}</b></div>${ops}</div>`;
+  }
+  return `<div class="ttl">${title}</div><div id="pin"><i></i><span></span></div>`;
+}
+
+// --- отображение: пульт инструктора ------------------------------------------------
+function consoleTop() {
+  const m = Object.entries(MODES).map(([k, t]) => `<button data-a="mode:${k}" class="${S.mode === k ? 'on' : ''}">${t}</button>`).join('');
+  const peer = peerAlive();
+  return `<div class="a-top">${BRAND}<div class="les">${LESSON}</div>
+    ${S.mode === 'exam' ? '<div class="a-time" id="clock"></div>' : ''}
+    <button class="a-open ${peer ? 'on' : ''}" data-a="open" title="Открыть экран обучаемых в отдельном окне"><i></i>Экран обучаемых</button>
+    <div class="a-modes">${m}</div></div>`;
+}
+function planPanel() {
+  const exam = S.mode === 'exam', E = S.exam;
+  const tabs = exam ? '<div class="a-tabs"><button class="on">Этапы</button></div>'
+    : `<div class="a-tabs"><button data-a="tab:steps" class="${S.tab === 'steps' ? 'on' : ''}">Этапы</button><button data-a="tab:nodes" class="${S.tab === 'nodes' ? 'on' : ''}">Оборудование</button></div>`;
+  if (!exam && S.tab === 'nodes') return `<div class="a-left pnl">${tabs}<div class="a-rows">${NODES.map((n) =>
+    `<button class="a-row sm ${S.node === n.part ? 'on' : ''}" data-a="node:${n.part}">${n.title}</button>`).join('')}</div></div>`;
+  const rows = STEPS.map((s, i) => {
+    const on = !S.node && !S.intro && i === S.step && !(exam && E.state === 'done'), done = exam ? i < E.stepsDone : i < S.done;
+    return `<button class="a-row ${on ? 'on' : ''} ${done ? 'done' : ''}" data-a="${exam ? 'noop' : 'step:' + i}"><span class="n">${i + 1}</span><span>${s.title}</span>${done ? I('check') : ''}</button>`;
+  }).join('');
+  return `<div class="a-left pnl">${tabs}<div class="a-rows">${rows}</div></div>`;
+}
+function notesPanel() {
+  const st = STEPS[S.step], nd = S.node && nodeOf(S.node);
+  if (nd) return `<div class="a-right pnl"><div class="cap">${nd.title}</div><p>${nd.text}</p><div class="a-q"><div class="acts"><button class="p" data-a="clearnode">Вернуться к этапу ${S.step + 1}</button></div></div></div>`;
+  const ops = st.options.map((o, i) => `<div class="op ${o.ok ? 'ok' : ''} ${S.q && S.wrong === i ? 'bad' : ''}"><span>${i + 1}</span><span>${o.t}</span><span class="c">${o.ok ? I('check') : ''}</span></div>`).join('');
+  return `<div class="a-right pnl"><div class="cap">Что сказать</div><p>${st.why}</p>
+    <div class="warn"><b>Если пропустить</b>${st.skip}</div>
+    <div class="a-q"><div class="qt">${st.q}</div>${ops}
+      <div class="acts"><button class="p" data-a="q">${S.q ? 'Убрать вопрос' : 'Вывести вопрос'}</button><button data-a="reveal" ${S.q ? '' : 'disabled'}>${S.reveal ? 'Скрыть ответ' : 'Открыть ответ'}</button></div></div></div>`;
+}
+function deck() {
+  const train = S.mode === 'training';
+  const main = train ? (S.q ? 'Убрать вопрос' : 'Вывести вопрос') : 'Показать операцию';
+  const t = (a, ic, label, on) => `<button data-a="${a}" class="${on ? 'on' : ''}">${I(ic)}<span>${label}</span></button>`;
+  return `<div class="a-deck"><div class="a-tr">
+      <button data-a="prev" ${S.step === 0 ? 'disabled' : ''}>${I('left')}Назад</button>
+      <button class="main" data-a="${train ? 'q' : 'show'}" ${S.busy ? 'disabled' : ''}>${I('play')}${main}</button>
+      <button data-a="next" ${S.step === STEPS.length - 1 ? 'disabled' : ''}>Далее${I('right')}</button></div>
+    <div class="a-tools">
+      ${t('viewt', S.view === 'eye' ? 'eye' : 'orbit', S.view === 'eye' ? 'Глазами оператора' : 'Со стороны', false)}
+      ${t('xray','layers','Прозрачная цистерна',S.xray)}${t('labels','tag','Подписи',S.labels)}
+      ${t('freeze','freeze','Стоп-кадр',S.freeze)}${t('blank','off','Затемнить экран',S.blank)}${t('mentor','mic','Наставник',S.mentor)}
+    </div></div>`;
+}
+function examDeck() {
+  const E = S.exam, h = helmetNow(), fin = E.state === 'done';
+  const man = h.present ? `<div class="tile ok">${I('check')}<span>Оператор в кадре</span></div>` : `<div class="tile stop">${I('alert')}<span>Оператора нет</span></div>`;
+  const hat = h.helmet ? `<div class="tile ok">${I('check')}<span>Каска на месте</span></div>` : `<div class="tile stop">${I('alert')}<span>Каски нет</span></div>`;
+  return `<div class="a-deck"><div class="a-tr two"><button data-a="exampause" ${fin ? 'disabled' : ''}>${I(E.state === 'pause' ? 'play' : 'pause')}${E.state === 'pause' ? 'Продолжить' : 'Пауза'}</button>
+      <button class="main stop" data-a="examstop" ${fin ? 'disabled' : ''}>${I('stop')}${fin ? 'Экзамен завершён' : 'Остановить экзамен'}</button></div>
+    <div class="a-tools four">${man}${hat}
+      <div class="tile"><span class="tile-n ${E.errors ? 'bad' : ''}">${E.errors}</span><span>Ошибки</span></div>
+      <div class="tile"><span class="tile-n ${E.ppe ? 'bad' : ''}">${E.ppe}</span><span>Нарушения СИЗ</span></div></div></div>`;
+}
+function examRight() {
+  const E = S.exam;
+  const rows = E.log.map((r) => `<div class="lg-row ${r.bad ? 'bad' : ''}"><span>${r.t}</span><span>${r.html}</span></div>`).join('');
+  const res = E.state === 'done' ? `<div class="res ${E.passed ? '' : 'bad'}"><b>${E.passed ? 'Зачёт' : 'Незачёт'}</b><span>Ошибки: ${E.errors}, нарушения СИЗ: ${E.ppe}, время ${E.final}</span></div>` : '';
+  return `<div class="a-right pnl"><div class="cam"></div>${rows}${res}</div>`;
+}
+function viewConsole() {
+  if (S.surface === 'class') return '';
+  const exam = S.mode === 'exam';
+  return `${consoleTop()}${planPanel()}${exam ? examDeck() + examRight() : deck() + notesPanel()}`;
+}
+
+// --- отображение: экран обучаемых --------------------------------------------------
+function traineeTop() {
+  const exam = S.mode === 'exam', E = S.exam;
+  const done = exam ? E.stepsDone : S.done;
+  const bars = STEPS.map((_, i) => `<i class="${i < done ? 'done' : !S.intro && i === S.step ? 'cur' : ''}"></i>`).join('');
+  return `<div class="a-top">${BRAND}<div class="les">${LESSON}: подготовка к наливу</div>
+    <div class="modeline">${MODES[S.mode]}</div><div class="progress">${bars}</div>${exam ? '<div class="clock" id="clock"></div>' : ''}</div>`;
+}
+function traineeBottom() {
+  const st = STEPS[S.step], nd = S.node && nodeOf(S.node);
+  const opts = (fn) => `<div class="t-opts">${st.options.map(fn).join('')}</div>`;
+  if (S.mode === 'exam') {
+    const E = S.exam;
+    if (E.state === 'done') return `<div class="t-bot"><div class="wait">Экзамен завершён.</div></div>`;
+    if (S.busy) return `<div class="t-bot"><div class="wait">Выполняется: ${st.title.toLowerCase()}…</div></div>`;
+    const off = E.state !== 'run';
+    return `<div class="t-bot"><h2>${st.q}</h2>${opts((o, i) =>
+      `<button class="opt ${E.wrong === i ? 'bad' : ''}" data-a="pick:${i}" ${off ? 'disabled' : ''}><b>${i + 1}</b>${o.t}</button>`)}</div>`;
+  }
+  if (S.q) {
+    // на обучении отвечает обучаемый: кнопкой или голосом («вариант два»)
+    const pick = S.mode === 'training' && !S.reveal;
+    return `<div class="t-bot"><h2>${st.q}</h2>${opts((o, i) => {
+      const cls = S.reveal ? (o.ok ? 'ok' : 'no') : S.wrong === i ? 'bad' : '';
+      return pick ? `<button class="opt ${cls}" data-a="pick:${i}"><b>${i + 1}</b>${o.t}</button>`
+        : `<div class="opt ${cls}"><b>${i + 1}</b>${o.t}</div>`;
+    })}</div>`;
+  }
+  if (nd) return `<div class="t-bot"><h2><small>Оборудование</small>${nd.title}</h2><p>${nd.text}</p></div>`;
+  if (S.intro) return `<div class="t-bot"><div class="wait">Занятие начнётся по команде инструктора.</div></div>`;
+  return `<div class="t-bot"><h2><small>${S.busy ? 'Показ операции' : `Этап ${S.step + 1}`}</small>${st.title}</h2><p>${st.why}</p></div>`;
+}
+function traineeLayers() {
+  const E = S.exam;
+  if (S.blank) return `<div class="t-layer blank"><div class="blank" style="position:static;background:none"><div class="bt">Смотрим <i>на инструктора</i></div><div class="bar"></div></div></div>`;
+  if (S.mode !== 'exam' || !E) return '';
+  if (E.state === 'pause') return `<div class="t-layer"><div class="card"><b>ПАУЗА</b><p>Экзамен приостановлен инструктором</p></div></div>`;
+  if (E.state === 'ppe') return `<div class="t-layer"><div class="card bad"><b>КАСКА НЕ ОБНАРУЖЕНА</b><p>Экзамен остановлен. Наденьте защитную каску</p></div></div>`;
+  if (E.state === 'done') {
+    const c = (ok) => ok ? 'ok' : 'bad';
+    return `<div class="t-layer"><div class="sheet"><h1>Протокол экзамена</h1><div class="sub">${LESSON} · подготовка к наливу</div><table>
+      <tr><td>Этапов выполнено</td><td class="${c(E.stepsDone === STEPS.length)}">${E.stepsDone} из ${STEPS.length}</td></tr>
+      <tr><td>Ошибки</td><td class="${c(!E.errors)}">${E.errors}</td></tr>
+      <tr><td>Нарушения СИЗ</td><td class="${c(!E.ppe)}">${E.ppe}</td></tr>
+      <tr><td>Время</td><td>${E.final}</td></tr>
+      <tr><td>Итог</td><td class="${c(E.passed)}">${E.passed ? 'ЗАЧЁТ' : 'НЕЗАЧЁТ'}</td></tr></table></div></div>`;
+  }
+  return '';
+}
+function viewTrainee() {
+  const f = S.flash ? `<div class="t-flash ${S.flash.ok ? 'ok' : 'bad'}"><div>${S.flash.text}${S.flash.small ? `<small>${S.flash.small}</small>` : ''}</div></div>` : '';
+  return `${traineeTop()}${traineeBottom()}${f}${traineeLayers()}`;
+}
+function traineeCam() {
+  if (ROLE !== 'trainee') return;
+  $('tcam').style.display = 'block';
+  $('tmentor').style.display = 'flex';
+  renderQuick();
+  const h = helmetNow();
+  $('tchips').innerHTML = `<span class="chip ${h.present ? 'ok' : 'bad'}">${I(h.present ? 'check' : 'alert')}${h.present ? 'Оператор в кадре' : 'Оператора нет'}</span>`
+    + `<span class="chip ${h.helmet ? 'ok' : 'bad'}">${I(h.helmet ? 'check' : 'alert')}${h.helmet ? 'Каска на месте' : 'Каски нет'}</span>`;
+}
+
+function placeGroup() {
+  const rect = ROLE === 'trainee' ? RECT.trainee : S.surface === 'class' ? RECT.full : RECT.console;
+  const [l, t, w, h] = rect;
+  const g = $('group');
+  Object.assign(g.style, { left:l + 'px', top:t + 'px', width:w + 'px', height:h + 'px' });
+  g.classList.toggle('card', rect !== RECT.full);
+  $('gs').style.transform = `scale(${w / 1920})`;
+  $('camv').style.display = ROLE === 'console' && S.mode === 'exam' && S.surface !== 'class' ? 'block' : 'none';
+}
+function render() {
+  placeGroup();
+  $('gs').innerHTML = groupLayer();
+  $('ui').innerHTML = ROLE === 'trainee' ? viewTrainee() : viewConsole();
+  traineeCam();
+  tick();
+}
+
+// Подпись стоит на узле: положение узла в кадре считается каждый кадр.
+const box = new THREE.Box3(), mid = new THREE.Vector3();
+let boxAt = 0, boxFor = '';
+function placePin() {
+  const pin = $('pin');
+  if (pin) {
+    const part = S.node || STEP_PART[S.step];
+    const on = S.labels && !S.intro && !S.q && !S.blank && S.mode !== 'exam';   // на экзамене подсказок нет
+    let ok = false;
+    if (on) {
+      const now = performance.now();
+      if (part !== boxFor || now - boxAt > 200) {
+        box.makeEmpty();
+        S3.parts[part].meshes.forEach((m) => box.expandByObject(m));
+        boxFor = part; boxAt = now;
+      }
+      box.getCenter(mid);
+      const p = mid.clone().project(S3.camera);
+      const x = (p.x + 1) * 960, y = (1 - p.y) * 540;
+      ok = p.z < 1 && x > 40 && x < 1880 && y > 90 && y < 1040;
+      if (ok) {
+        pin.style.left = x + 'px'; pin.style.top = y + 'px';
+        pin.classList.toggle('l', x > 1300);
+        const t = S.node ? nodeOf(S.node).title : STEP_PIN[S.step];
+        const s = pin.lastElementChild;
+        if (s.textContent !== t) s.textContent = t;
+      }
+    }
+    pin.style.display = ok ? 'flex' : 'none';
+  }
+  requestAnimationFrame(placePin);
+}
+function tick() {
+  const c = $('clock');
+  if (c && S.exam) c.textContent = S.exam.state === 'done' ? S.exam.final : S.exam.state === 'run' ? clock() : c.textContent || clock();
+}
+setInterval(tick, 500);
+
+function act(a, remote = false) {
+  const [k, v] = a.split(':');
+  if (k === 'noop') return;
+  if (!remote && ROLE === 'console' && !LOCAL_ONLY.has(k)) send({ a });
+  if (k === 'step') goStep(+v);
+  else if (k === 'prev') goStep(S.step - 1);
+  else if (k === 'next') goStep(S.intro ? 0 : S.step + 1);
+  else if (k === 'show') show();
+  else if (k === 'node') goNode(v);
+  else if (k === 'clearnode') { S.node = null; S3.focus(STEP_PART[S.step], MINT); render(); }
+  else if (k === 'q') toggleQ();
+  else if (k === 'reveal') reveal();
+  else if (k === 'tab') { S.tab = v; render(); }
+  else if (k === 'open') window.open('concept.html?screen=trainee', 'mentrica-trainee', 'popup,width=1280,height=720');
+  else if (k === 'pick') { if (S.mode === 'exam') examAnswer(S.step, +v); else trainAnswer(S.step, +v); }
+  else if (k === 'mode') {
+    if (v === 'exam') { examStart(); $('camv').dispatchEvent(new Event('examstart')); }
+    else { S.mode = v; S.exam = null; S.q = false; S.reveal = false; $('camv').pause(); render(); }
+  }
+  else if (k === 'viewt') { S.view = S.view === 'eye' ? 'orbit' : 'eye'; S3.setMode(S.view); render(); }
+  else if (k === 'xray') { S.xray = !S.xray; S3.xray(S.xray); render(); }
+  else if (k === 'freeze') { S.freeze = !S.freeze; S.freeze ? S3.pause() : S3.resume(); render(); }
+  else if (k === 'blank') { S.blank = !S.blank; if (S.blank) S.q = false; render(); }
+  else if (k === 'labels') { S.labels = !S.labels; render(); }
+  else if (k === 'mentor') { S.mentor = !S.mentor; if (!S.mentor) stopSpeech(); render(); }
+  else if (k === 'exampause') examPause();
+  else if (k === 'examstop') examFinish();
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-a]'); if (b && !b.disabled) act(b.dataset.a); });
+addEventListener('keydown', (e) => {
+  if (ROLE !== 'console' || S.mode === 'exam') return;
+  if (e.key === 'ArrowRight') act('next'); else if (e.key === 'ArrowLeft') act('prev');
+});
+
+// Экран обучаемых, открытый позже пульта, получает текущее состояние целиком.
+function snapshot() {
+  const E = S.exam && { ...S.exam, elapsed: (S.exam.state === 'run' ? Date.now() : S.exam.stoppedAt || Date.now()) - S.exam.t0 - S.exam.lost };
+  return { intro:S.intro, step:S.step, node:S.node, mode:S.mode, q:S.q, reveal:S.reveal, blank:S.blank, freeze:S.freeze,
+    view:S.view, xray:S.xray, labels:S.labels, mentor:S.mentor, wrong:S.wrong, done:S.done, exam:E };
+}
+async function applySync(m) {
+  const { done, exam, ...rest } = m;
+  Object.assign(S, rest);
+  if (exam) { const { elapsed, ...e } = exam; S.exam = { ...e, t0:Date.now() - elapsed, lost:0, stoppedAt:Date.now() }; } else S.exam = null;
+  S3.setMode(S.view);
+  await syncOps(done);
+  S3.xray(S.xray);
+  if (S.mode === 'exam') { S3.clear(); S3.view(STEP_PART[S.step]); }
+  else if (!S.intro) S3.focus(S.node || STEP_PART[S.step], MINT);
+  if (S.freeze) S3.pause();
+  render();
+}
+function onMessage(m) {
+  if (m.a) act(m.a, true);
+  else if (m.exam) examAnswer(m.exam[0], m.exam[1], true);
+  else if (m.train) trainAnswer(m.train[0], m.train[1], true);
+  else if (ROLE === 'console' && (m.hello || m.ping)) {
+    const was = peerAlive(); peerAt = Date.now();
+    if (m.hello) send({ sync:snapshot() });
+    if (!was) render();
+  } else if (ROLE === 'trainee' && m.sync) applySync(m.sync);
+}
+bc.onmessage = ({ data }) => onMessage(data);
+connectLive();
+if (ROLE === 'console') setInterval(() => { if (peerAt && !peerAlive()) { peerAt = 0; render(); } }, 1000);
+
+// --- ИИ-наставник обучаемого: вопросы голосом и кнопками, ответы модели стенда ------
+const QUICK = {
+  review: [['Подробнее', 'Расскажите об этом подробнее'], ['Зачем это нужно?', 'Зачем это нужно?'], ['Что если нарушить?', 'Что будет, если нарушить этот этап?']],
+  training: [['Что дальше?', 'Что делать дальше?'], ['Почему ошибка?', 'Почему ошибка?'], ['Зачем этот шаг?', 'Зачем нужен этот шаг?'], ['Что если пропустить?', 'Что будет, если пропустить этот шаг?']],
+  exam: [['Почему ошибка?', 'Почему ошибка?']],
+};
+let quickFor = '', mentorOn = false, serverStt = false, asking = 0;
+function renderQuick() {
+  if (quickFor === S.mode) return;
+  quickFor = S.mode;
+  $('quick').innerHTML = QUICK[S.mode].map(([label, q]) => `<button data-q="${q}">${label}</button>`).join('');
+}
+$('quick').addEventListener('click', (e) => { const b = e.target.closest('[data-q]'); if (b) handleUtterance(b.dataset.q); });
+
+const norm = (t) => ' ' + t.toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim() + ' ';
+// «Почему не вариант 1?» — вопрос, а не выбор.
+const QUESTION = / (почему|зачем|для чего|что|как|какой|какая|какие|где|когда|сколько|можно ли|нельзя|объясни|расскажи|подскажи|помоги) /;
+function pickOption(n) {
+  const short = n.trim().split(' ').length <= 3;
+  const letter = [
+    / (вариант |ответ |номер )?(1|один|одна|первый|первое|первая|а|a) /,
+    / (вариант |ответ |номер )?(2|два|две|второй|второе|вторая|б|бэ|b) /,
+    / (вариант |ответ |номер )?(3|три|третий|третье|третья|в|вэ|v) /,
+  ];
+  for (let i = 0; i < 3; i++) if ((/ вариант | ответ /.test(n) || short) && letter[i].test(n)) return i;
+  const hits = STEPS[S.step].options.map((o, i) => (o.kw.test(n) ? i : -1)).filter((i) => i >= 0);
+  return hits.length === 1 ? hits[0] : -1;
+}
+const canPick = () => (S.mode === 'exam' && S.exam && S.exam.state === 'run' && !S.busy) || (S.mode === 'training' && S.q && !S.reveal);
+function handleUtterance(text) {
+  addMsg(text, 'me');
+  const n = norm(text);
+  if (S.exam && (S.exam.state === 'pause' || S.exam.state === 'ppe')) { say(S.exam.state === 'ppe' ? 'Сначала наденьте каску.' : 'Экзамен на паузе. Дождитесь инструктора.', true); return; }
+  if (/ повтор| еще раз | не понял /.test(n) && lastSaid) { say(lastSaid, true); return; }
+  const isQuestion = QUESTION.test(n) || /\?\s*$/.test(text);
+  if (canPick() && !isQuestion) {
+    const i = pickOption(n);
+    if (i >= 0) { act('pick:' + i); return; }
+    if (/^ (вариант|ответ|номер) $/.test(n)) { say('Не расслышал номер. Назовите вариант цифрой: один, два или три.', true); return; }
+  }
+  askMentor(text, n);
+}
+const wrongOption = () => {
+  const st = STEPS[S.step], w = S.mode === 'exam' ? S.exam && S.exam.wrong : S.wrong;
+  return w === null || w === undefined ? null : st.options[w];
+};
+// Что видит обучаемый — наставнику. На экзамене модель предупреждена не подсказывать.
+function mentorState() {
+  const st = STEPS[S.step], nd = S.node && nodeOf(S.node), exam = S.mode === 'exam', E = S.exam;
+  const w = wrongOption(), open = exam ? !S.busy && E.state !== 'done' : S.q && !S.reveal;
+  const base = { step:S.step, steps_total:STEPS.length, errors: exam ? E.errors : 0, helmet: helmetNow().helmet,
+    last_error: w ? `выбрано «${w.t}»: ${w.err}` : null };
+  if (nd) return { ...base, step_title:`обзор оборудования, узел «${nd.title}»`, question:'', options:[], done:[],
+    notes:`Описание узла из модели эстакады: ${nd.text} РЕЖИМ ОБЗОРА: инструктор показывает оборудование.` };
+  return { ...base, step_title:st.title,
+    notes: exam ? 'РЕЖИМ ЭКЗАМЕНА: не называй правильный вариант и следующее действие, не намекай на них; объясняй только назначение оборудования и последствия уже совершённых ошибок.'
+      : `${st.hint} Зачем: ${st.why} Если пропустить: ${st.skip}` + (S.mode === 'review' ? ' РЕЖИМ ОБЗОРА: инструктор показывает операцию по этапам, порядок действий можно объяснять прямо.' : ''),
+    question: open ? st.q : '', options: open ? st.options.map((o) => o.t) : [],
+    done: STEPS.slice(0, exam ? E.stepsDone : S.done).map((x) => x.title) };
+}
+// Ответ без модели — по тексту СОП.
+function templateAnswer(n) {
+  const st = STEPS[S.step], nd = S.node && nodeOf(S.node), w = wrongOption();
+  if (nd) return `${nd.title}. ${nd.text}`;
+  if (/ почему | ошибк| не так /.test(n)) return w ? `Вы выбрали «${w.t}». ${w.err}` : 'Ошибок сейчас нет.';
+  if (S.mode === 'exam') return 'Режим экзамена: подсказки по ходу операции отключены. Выберите вариант сами.';
+  if (/ пропуст| если не | без этого | наруш/.test(n)) return `Если пропустить этап «${st.title.toLowerCase()}»: ${st.skip}`;
+  if (/ зачем | для чего | смысл /.test(n)) return st.why;
+  return `Сейчас этап «${st.title.toLowerCase()}». ${st.hint}`;
+}
+async function askMentor(text, n) {
+  if (!mentorOn) { say(templateAnswer(n), true); return; }
+  const ticket = ++asking;
+  const wait = addMsg('Думаю…', 'ai think');
+  try {
+    const r = await fetch('/expo/ask', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ question:text, state:mentorState() }) });
+    const res = await r.json();
+    if (!r.ok) throw new Error(res.detail || r.status);
+    wait.remove();
+    if (ticket === asking) say(res.answer, true);
+  } catch (_) {
+    wait.remove();
+    if (ticket === asking) say(templateAnswer(n), true);
+  }
+}
+
+// Микрофон: удерживать кнопку или пробел. Речь распознаёт стенд (/voice/listen),
+// без него — браузер. Микрофон вебкамеры выбирается сам, его можно сменить внизу.
+const micBtn = $('mic'), heard = $('heard'), MIC_RATE = 16000;
+let mic = null, recording = false, recognizing = false, micByHand = false;
+try { micByHand = !!localStorage.getItem('concept-mic'); } catch (_) { /* приватный режим */ }
+async function listMics() {
+  const sel = $('micSelect');
+  const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
+  let saved = null;
+  try { saved = localStorage.getItem('concept-mic'); } catch (_) { /* приватный режим */ }
+  sel.innerHTML = devices.map((d, i) => `<option value="${d.deviceId}">${d.label || 'микрофон ' + (i + 1)}</option>`).join('');
+  // Выбранный вручную → системный по умолчанию → вебкамера; виртуальные (Pico, Steam…) не берём.
+  const real = devices.filter((d) => !/pico|virtual|виртуал|steam|oculus|quest|vb-audio|cable|voicemeeter|stereo mix|стерео ?микшер|broadcast|wo mic|droidcam|iriun/i.test(d.label));
+  const pick = devices.find((d) => d.deviceId === saved) || real.find((d) => d.deviceId === 'default')
+    || real.find((d) => /web ?cam|камер/i.test(d.label)) || real.find((d) => d.deviceId !== 'communications') || devices[0];
+  if (pick) sel.value = pick.deviceId;
+}
+$('micSelect').onchange = (e) => { micByHand = true; try { localStorage.setItem('concept-mic', e.target.value); } catch (_) { /* приватный режим */ } closeMic(); };
+function closeMic() { if (!mic) return; mic.stream.getTracks().forEach((t) => t.stop()); mic.ctx.close(); mic = null; }
+const micLabel = () => { const o = $('micSelect').selectedOptions[0]; return o ? o.textContent : 'микрофон'; };
+async function openMic() {
+  const id = $('micSelect').value;
+  const stream = await navigator.mediaDevices.getUserMedia({ audio:{ deviceId: id ? { exact:id } : undefined, echoCancellation:true, noiseSuppression:true } });
+  const ctx = new AudioContext(), src = ctx.createMediaStreamSource(stream), node = ctx.createScriptProcessor(4096, 1, 1);
+  const m = { ctx, stream, chunks:[], rate:ctx.sampleRate, level:0 };
+  node.onaudioprocess = (e) => {
+    const d = e.inputBuffer.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+    m.level = peak;
+    if (recording) m.chunks.push(new Float32Array(d));
+  };
+  src.connect(node); node.connect(ctx.destination);
+  return m;
+}
+async function ensureMic() {
+  if (mic) return mic;
+  mic = await openMic();
+  const before = $('micSelect').value;
+  await listMics().catch(() => {});
+  if (!micByHand && $('micSelect').value !== before) { closeMic(); mic = await openMic(); }
+  return mic;
+}
+function drawLevel() {
+  const v = recording && mic ? Math.min(1, mic.level * 3) : 0;
+  $('micLevel').firstElementChild.style.width = (v * 100).toFixed(0) + '%';
+  $('micLevel').classList.toggle('show', recording);
+  requestAnimationFrame(drawLevel);
+}
+function toWav(chunks, rate) {
+  const total = chunks.reduce((n, c) => n + c.length, 0), merged = new Float32Array(total);
+  let off = 0;
+  for (const c of chunks) { merged.set(c, off); off += c.length; }
+  // тихую речь Whisper теряет: поднимаем до общего уровня, но не больше чем в 12 раз
+  let peak = 0;
+  for (let i = 0; i < total; i++) { const a = Math.abs(merged[i]); if (a > peak) peak = a; }
+  const gain = peak > 0 ? Math.min(12, 0.7 / peak) : 1;
+  const ratio = rate / MIC_RATE, length = Math.floor(total / ratio), pcm = new Int16Array(length);
+  for (let i = 0; i < length; i++) {
+    const from = Math.floor(i * ratio), to = Math.min(total, Math.floor((i + 1) * ratio));
+    let acc = 0;
+    for (let j = from; j < to; j++) acc += merged[j];
+    pcm[i] = Math.max(-1, Math.min(1, gain * acc / Math.max(1, to - from))) * 0x7fff;
+  }
+  const buf = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(buf);
+  const tag = (at, t) => { for (let i = 0; i < t.length; i++) v.setUint8(at + i, t.charCodeAt(i)); };
+  tag(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, MIC_RATE, true); v.setUint32(28, MIC_RATE * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  tag(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Blob([buf], { type:'audio/wav' });
+}
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+if (SR) {
+  rec = new SR(); rec.lang = 'ru-RU'; rec.interimResults = true; rec.continuous = false;
+  let finalText = '';
+  rec.onresult = (e) => {
+    let t = '';
+    for (const r of e.results) t += r[0].transcript;
+    heard.textContent = '«' + t + '»';
+    if (e.results[e.results.length - 1].isFinal) finalText = t;
+  };
+  rec.onend = () => {
+    recording = false; micBtn.classList.remove('on');
+    const t = finalText.trim(); finalText = '';
+    if (t) handleUtterance(t); else if (heard.textContent === 'Слушаю…') heard.textContent = 'Не расслышал, повторите';
+  };
+  rec.onerror = (e) => { heard.textContent = e.error === 'not-allowed' ? 'Нет доступа к микрофону' : 'Ошибка распознавания: ' + e.error; };
+}
+async function micStart() {
+  if (recording || recognizing) return;
+  stopSpeech();
+  if (!serverStt) {
+    if (!rec) { heard.textContent = 'Распознавание речи не настроено, спросите кнопкой'; return; }
+    recording = true; micBtn.classList.add('on'); heard.textContent = 'Слушаю…';
+    try { rec.start(); } catch (_) { /* уже запущено */ }
+    return;
+  }
+  try {
+    const m = await ensureMic();
+    if (m.ctx.state === 'suspended') await m.ctx.resume();
+    m.chunks = []; recording = true; micBtn.classList.add('on');
+    heard.textContent = 'Слушаю… отпустите, когда договорите';
+  } catch (err) { heard.textContent = 'Нет доступа к микрофону: ' + err.message; }
+}
+async function micStop() {
+  if (!recording) return;
+  recording = false; micBtn.classList.remove('on');
+  if (!serverStt) { if (rec) rec.stop(); return; }
+  const chunks = mic.chunks; mic.chunks = [];
+  if (chunks.reduce((n, c) => n + c.length, 0) / mic.rate < 0.4) { heard.textContent = 'Удерживайте кнопку, пока говорите'; return; }
+  let peak = 0;
+  for (const c of chunks) for (let i = 0; i < c.length; i++) { const a = Math.abs(c[i]); if (a > peak) peak = a; }
+  if (peak < 0.004) { heard.textContent = `Микрофон «${micLabel()}» молчит, выберите другой внизу`; return; }
+  recognizing = true; heard.textContent = 'Распознаю…';
+  try {
+    const r = await fetch('/voice/listen?dry_run=true', { method:'POST', headers:{ 'Content-Type':'audio/wav' }, body:toWav(chunks, mic.rate) });
+    const res = await r.json();
+    if (!r.ok) throw new Error(res.detail || r.status);
+    heard.textContent = res.transcript ? '«' + res.transcript + '»' : 'Не расслышал. Говорите громче или ближе';
+    if (res.transcript) handleUtterance(res.transcript);
+  } catch (err) { heard.textContent = 'Распознавание не удалось: ' + err.message; }
+  finally { recognizing = false; }
+}
+
+async function standState() {
+  try {
+    const vs = await (await fetch('/voice/state')).json();
+    voiceServer = true; serverStt = vs.server_stt === true;
+  } catch (_) { voiceServer = false; serverStt = false; }
+  // заодно держит тёплым соединение стенда с моделью
+  try { mentorOn = (await (await fetch('/expo/state')).json()).mentor === true; } catch (_) { mentorOn = false; }
+}
+
+if (ROLE === 'trainee') {
+  document.title = 'Экран обучаемых: прототип';
+  connectCam();
+  send({ hello:1 });
+  setInterval(() => send({ ping:1 }), 2000);
+  setInterval(traineeCam, 1000);
+  micBtn.addEventListener('pointerdown', micStart);
+  micBtn.addEventListener('pointerup', micStop);
+  micBtn.addEventListener('pointerleave', micStop);
+  addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && e.target.tagName !== 'SELECT') { e.preventDefault(); micStart(); } });
+  addEventListener('keyup', (e) => { if (e.code === 'Space') { e.preventDefault(); micStop(); } });
+  requestAnimationFrame(drawLevel);
+  if (navigator.mediaDevices) listMics().catch(() => {});
+  standState();
+  setInterval(standState, 60000);
+} else {
+  fetch('/voice/state').then((r) => { voiceServer = r.ok; }).catch(() => {});
+}
+
+function fit() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  const st = $('stage');
+  st.style.transform = `scale(${s})`;
+  st.style.left = (innerWidth - 1920 * s) / 2 + 'px';
+  st.style.top = (innerHeight - 1080 * s) / 2 + 'px';
+}
+addEventListener('resize', fit);
+fit();
+render();
+S3.view('overview', 1);
+placePin();
+
+// Для съёмки: все фразы занятия синтезируются заранее.
+// examStep(i, ok) — ответ обучаемого: верный или первый неверный вариант.
+const pickFor = (i, ok) => STEPS[i].options.findIndex((o) => !!o.ok === ok);
+window.PROTO = { act, examStep: (i, ok) => examAnswer(i, pickFor(i, ok)), examFinish, say, render, HELMET };
+(async () => {
+  const lines = [...STEPS.map((s) => s.why), ...STEPS.map((s) => s.success), ...NODES.map((n) => n.text), PPE_WARN, PPE_OK,
+    ...STEPS.flatMap((s) => s.options.filter((o) => o.err).map((o) => o.err))].flatMap(sentences);
+  for (const t of lines) { try { await fetchVoice(t); } catch (_) { /* фразу синтезируем при показе */ } }
+  S.ready = true;
+})();
+</script>
+</body>
+</html>

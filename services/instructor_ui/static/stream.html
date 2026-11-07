@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Видеопоток</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310131a'/%3E%3Crect x='6' y='10' width='14' height='12' rx='2' fill='%234a9eff'/%3E%3Cpath d='M22 14l5-3v10l-5-3z' fill='%2335c46a'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #10131a; --panel: #171b24; --panel-2: #1e2330; --line: #2a3040;
+    --text: #e6e9f0; --muted: #8b93a7; --accent: #4a9eff; --ok: #35c46a;
+    --warn: #e5a13a; --crit: #ef4d4d; --unclear: #8b7de0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 14px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+    display: flex; flex-direction: column; gap: 11px; height: 100vh;
+  }
+
+  .head { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap; }
+  .head .spacer { flex: 1; }
+  .head .meta { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.live { background: var(--ok); animation: pulse 1.6s ease-in-out infinite; }
+  .dot.lost { background: var(--crit); }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
+  .state { font-size: 13px; }
+  .state.lost { color: var(--crit); font-weight: 600; }
+
+  .filter { display: flex; gap: 4px; }
+  .filter button {
+    background: var(--panel); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 6px; padding: 3px 9px; font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .filter button:hover { border-color: var(--accent); }
+  .filter button.active { background: var(--accent); border-color: var(--accent); color: #08111d; }
+
+  /* Ролик с отрисовкой распознавания. Показывается только при проигрывании
+     записи: у эмулятора картинки нет и выдумывать её нельзя. */
+  /* Контейнер по размеру кадра, а не во всю ширину: съёмка вертикальная,
+     и растянутый фон дал бы широкие чёрные поля по бокам. */
+  .player {
+    flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .player video {
+    height: 100%; width: auto; max-width: 100%; display: block;
+    border: 1px solid var(--line); border-radius: 9px; background: #000;
+  }
+
+  /* Пока идёт разобранный ролик, он и есть главное на экране: лента событий
+     дублировала бы то, что и так видно рамками, и отвлекала бы от картинки. */
+  body.with-video .feed,
+  body.with-video .filter { display: none; }
+
+  .caption {
+    flex: none; padding: 11px 13px; border-radius: 9px; font-size: 15px;
+    background: var(--panel); border: 1px solid var(--line);
+  }
+  .caption.idle { color: var(--muted); font-size: 13px; }
+  .caption.lost { border-color: var(--crit); background: rgba(239,77,77,.07); }
+
+  .chips { flex: none; display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip {
+    display: flex; gap: 7px; align-items: baseline; padding: 5px 10px;
+    border-radius: 7px; background: var(--panel-2); border: 1px solid var(--line);
+    font-size: 12px;
+  }
+  .chip .v { font-family: ui-monospace, monospace; font-size: 12px; }
+  .chip.set { border-color: rgba(53,196,106,.45); }
+  .chip.set .v { color: var(--ok); }
+  .chip.none .v { color: var(--warn); }
+
+  /* Лента событий: то, что источник шлёт в систему, как есть. */
+  .feed {
+    flex: 1; min-height: 120px; overflow-y: auto; border-radius: 9px;
+    background: var(--panel); border: 1px solid var(--line);
+    font-family: ui-monospace, "Cascadia Mono", monospace; font-size: 12px;
+  }
+  .feed .row {
+    display: grid; grid-template-columns: 92px 1fr 62px 58px 92px;
+    gap: 9px; padding: 4px 11px; border-bottom: 1px solid rgba(42,48,64,.5);
+    white-space: nowrap;
+  }
+  .feed .row:last-child { border-bottom: none; }
+  .feed .t { color: var(--muted); }
+  .feed .var { color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+  .feed .val { color: var(--ok); }
+  .feed .conf { color: var(--muted); text-align: right; }
+  .feed .status { font-size: 11px; }
+  .feed .row.unclear .val, .feed .row.unclear .status { color: var(--unclear); }
+  .feed .row.confirmed {
+    background: rgba(74,158,255,.10); border-left: 2px solid var(--accent); padding-left: 9px;
+  }
+  .feed .row.confirmed .val { color: var(--accent); font-weight: 600; }
+  .feed .row.lost { background: rgba(239,77,77,.10); }
+  .feed .row.lost .val, .feed .row.lost .status { color: var(--crit); }
+  .feed .empty { padding: 14px; color: var(--muted); font-family: inherit; }
+
+  .foot { flex: none; display: flex; align-items: center; gap: 11px;
+          font-size: 11px; color: var(--muted); }
+  .foot .spacer { flex: 1; }
+  .progress { flex: 1; height: 4px; border-radius: 2px; background: var(--panel-2); overflow: hidden; }
+  .progress > i { display: block; height: 100%; background: var(--accent); transition: width .3s linear; }
+
+  @media (max-width: 620px) {
+    body { padding: 11px; }
+    .feed .row { grid-template-columns: 74px 1fr 52px; }
+    .feed .conf, .feed .status { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <span class="dot" id="dot"></span>
+  <span class="state" id="state">нет данных</span>
+  <span class="spacer"></span>
+  <span class="meta" id="rate"></span>
+  <span class="meta" id="cam"></span>
+  <div class="filter">
+    <button data-mode="all" class="active">Все события</button>
+    <button data-mode="changes">Только смены</button>
+  </div>
+</div>
+
+<div class="player" id="player" style="display:none">
+  <video id="video" muted playsinline preload="auto"></video>
+</div>
+
+<div class="caption idle" id="caption">Занятие не запущено</div>
+<div class="chips" id="chips"></div>
+
+<div class="feed" id="feed"><div class="empty">Событий пока нет</div></div>
+
+<div class="foot">
+  <span id="situation"></span>
+  <span class="spacer"></span>
+  <div class="progress"><i id="progress" style="width:0%"></i></div>
+  <span id="elapsed"></span>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const MAX_ROWS = 140;
+const MAX_CHANGES = 60;
+
+let scenario = null, snapshot = null, duration = null;
+let currentReplay = null, replayTitle = null;
+let flushQueued = false, seen = 0, window1s = [];
+let mode = 'all';
+
+// Два списка вместо одного. Сырых наблюдений идут десятки в секунду, и при
+// общем буфере смены состояния — самое содержательное в потоке — вымывались
+// бы из ленты за несколько секунд.
+let rowsAll = [], rowsChanges = [];
+
+async function api(path) {
+  const response = await fetch(path);
+  if (response.status === 409) {
+    // Занятие потеряно: стенд перезапустили. Ключ выдаёт страница —
+    // достаточно перезагрузиться.
+    reloadOnce();
+    throw new Error(`${path}: занятие не найдено`);
+  }
+  if (!response.ok) throw new Error(`${path}: ${response.status}`);
+  return response.json();
+}
+
+let reloading = false;
+function reloadOnce() {
+  if (reloading) return;
+  reloading = true;
+  location.reload();
+}
+
+
+async function loadScenario() {
+  scenario = await api('/scenario');
+  document.title = `Видеопоток — ${scenario.scenario_code}`;
+  renderChips();
+}
+
+const titleOf = (name) => scenario?.observables?.[name]?.title || name;
+
+function valueTitle(name, value) {
+  if (value === null || value === undefined) return '—';
+  return scenario?.observables?.[name]?.values?.[value] || value;
+}
+
+function renderChips() {
+  if (!scenario) return;
+  const observed = snapshot?.observed_state || {};
+  $('chips').innerHTML = Object.keys(scenario.observables).map(name => {
+    const value = observed[name];
+    return `<div class="chip ${value ? 'set' : 'none'}">
+      <span>${titleOf(name)}</span>
+      <span class="v">${value ? valueTitle(name, value) : 'не определено'}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ---------- лента ----------
+   Наблюдения приходят десятками в секунду. Копим и выливаем в DOM кадром
+   отрисовки: по строке на сообщение браузер не успевал бы, а лента всё равно
+   читается только как поток. */
+const fmtTime = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('ru-RU', {hour12: false}) +
+    '.' + String(d.getMilliseconds()).padStart(3, '0');
+};
+
+function push(row, isChange) {
+  rowsAll.unshift(row);
+  if (rowsAll.length > MAX_ROWS) rowsAll.length = MAX_ROWS;
+  if (isChange) {
+    rowsChanges.unshift(row);
+    if (rowsChanges.length > MAX_CHANGES) rowsChanges.length = MAX_CHANGES;
+  }
+  if (flushQueued) return;
+  flushQueued = true;
+  requestAnimationFrame(flush);
+}
+
+function flush() {
+  flushQueued = false;
+  const feed = $('feed');
+  const rows = mode === 'changes' ? rowsChanges : rowsAll;
+
+  if (!rows.length) {
+    feed.innerHTML = '<div class="empty">Событий пока нет</div>';
+    return;
+  }
+
+  const atTop = feed.scrollTop <= 4;
+  feed.innerHTML = rows.map(r => `<div class="row ${r.cls}">
+      <span class="t">${r.time}</span>
+      <span class="var">${r.variable}</span>
+      <span class="val">${r.value}</span>
+      <span class="conf">${r.confidence}</span>
+      <span class="status">${r.status}</span>
+    </div>`).join('');
+  // Лента растёт сверху: пока инструктор не отлистал, держим её у начала.
+  if (atTop) feed.scrollTop = 0;
+}
+
+function onObservation(o) {
+  seen++;
+  window1s.push(Date.now());
+  push({
+    cls: o.unclear ? 'unclear' : '',
+    time: fmtTime(o.frame_ts),
+    variable: o.variable,
+    value: o.unclear ? '—' : o.value,
+    confidence: o.unclear ? '' : o.confidence.toFixed(2),
+    status: o.unclear ? 'UNCLEAR' : 'RECOGNIZED',
+  }, false);
+}
+
+function onStateChange(s) {
+  const confirmed = s.quality === 'confirmed';
+  push({
+    cls: confirmed ? 'confirmed' : 'lost',
+    time: fmtTime(s.confirmed_ts),
+    variable: s.variable,
+    value: confirmed
+      ? `${s.previous_value ?? '—'} → ${s.value}`
+      : (s.quality === 'stale' ? 'нет данных' : 'не разобрано'),
+    confidence: confirmed ? s.confidence.toFixed(2) : '',
+    status: confirmed ? `подтверждено ${Math.round(s.agreement * 100)}%` : s.quality.toUpperCase(),
+  }, true);
+}
+
+function tickRate() {
+  const now = Date.now();
+  window1s = window1s.filter(t => now - t < 1000);
+  $('rate').textContent = seen ? `${window1s.length}/с · всего ${seen}` : '';
+}
+
+/* ---------- состояние источника ---------- */
+/* ---------- ролик записи ----------
+   Запись проигрывается на сервере, ролик — в браузере. Общая точка отсчёта у
+   них одна: положение кадра в съёмке. Поэтому видео подтягивается к позиции
+   записи, а не живёт само по себе. */
+async function syncReplay() {
+  let status = null;
+  try { status = await api('/cv/status'); } catch { return; }
+
+  const video = $('video');
+  if (!status.replay) {
+    // Запись отыграла, но ролик закольцован и продолжает идти: гасим его
+    // только когда занятие закончилось или сброшено.
+    const live = snapshot && (snapshot.state === 'running' || snapshot.state === 'paused');
+    if (currentReplay && !live) {
+      currentReplay = null;
+      replayTitle = null;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      $('player').style.display = 'none';
+      document.body.classList.remove('with-video');
+    }
+    return;
+  }
+
+  if (status.replay !== currentReplay) {
+    currentReplay = status.replay;
+    replayTitle = status.replay_title || null;
+    // Короткие записи закольцовываем: на показе картинка не должна гаснуть
+    // через десять секунд. Зацикливается только видео — события проигрываются
+    // один раз, иначе повтор выглядел бы как новое нарушение.
+    video.loop = true;
+    video.src = `/cv/logs/${status.replay}/video`;
+    $('player').style.display = '';
+    document.body.classList.toggle('with-video', !!status.replay_video);
+  }
+
+  const target = status.replay_position_sec || 0;
+  // Подтягиваем к позиции записи только на первом проходе. Дальше ролик
+  // крутится сам: события уже отыграли, и синхронизировать больше нечего.
+  if (Number.isFinite(video.duration) && target < video.duration - 0.3
+      && Math.abs(video.currentTime - target) > 0.6) {
+    video.currentTime = target;
+  }
+  if (video.paused) video.play().catch(() => {});
+}
+
+async function poll() {
+  await syncReplay();
+
+  let state = null;
+  try { state = await api('/emulator/state'); } catch { /* источник может быть внешним */ }
+
+  if (currentReplay) state = null;   // источник — запись, а не эмулятор
+  const online = state ? state.stream === 'online' : (snapshot?.stream_online !== false);
+  const running = snapshot?.state === 'running';
+  const paused = snapshot?.state === 'paused';
+
+  $('dot').className = 'dot ' + (online ? (running ? 'live' : '') : 'lost');
+  $('state').className = 'state' + (online ? '' : ' lost');
+  $('state').textContent = !online ? 'сигнал потерян'
+    : paused ? 'пауза' : running ? 'идёт передача' : 'канал свободен';
+
+  const caption = $('caption');
+  if (!online) {
+    caption.className = 'caption lost';
+    caption.textContent = 'Изображение с камеры недоступно. Оценка действий приостановлена.';
+  } else if (state && state.note) {
+    caption.className = 'caption';
+    caption.textContent = state.note;
+  } else if (replayTitle) {
+    caption.className = 'caption';
+    caption.textContent = replayTitle;
+  } else {
+    caption.className = 'caption idle';
+    caption.textContent = paused ? 'Занятие приостановлено'
+      : running ? 'Ожидание действий обучаемого' : 'Занятие не запущено';
+  }
+
+  if (state && state.run_id) {
+    if (duration === null) {
+      const runs = await api('/emulator/runs').catch(() => []);
+      const run = runs.find(r => r.id === state.run_id);
+      duration = run ? run.duration_sec : 0;
+    }
+    const share = duration ? Math.min(1, state.run_elapsed_sec / duration) : 0;
+    $('situation').textContent = state.run_title || '';
+    $('progress').style.width = `${share * 100}%`;
+    $('elapsed').textContent = `${state.run_elapsed_sec.toFixed(0)} с`;
+  } else {
+    duration = null;
+    $('situation').textContent = '';
+    $('progress').style.width = '0%';
+    $('elapsed').textContent = '';
+  }
+}
+
+function connect() {
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  const socket = new WebSocket(`${protocol}://${location.host}/ws`);
+  socket.onmessage = (message) => {
+    const {type, payload} = JSON.parse(message.data);
+    if (type === 'observation') { onObservation(payload); $('cam').textContent = payload.camera_id; }
+    else if (type === 'state') onStateChange(payload);
+    else if (type === 'snapshot') {
+      const changed = snapshot?.sop_id !== payload.sop_id;
+      snapshot = payload;
+      if (changed) { duration = null; loadScenario(); }
+      else renderChips();
+    }
+  };
+  socket.onclose = () => setTimeout(connect, 1500);
+}
+
+document.querySelectorAll('.filter button').forEach(button => {
+  button.onclick = () => {
+    mode = button.dataset.mode;
+    document.querySelectorAll('.filter button').forEach(
+      b => b.classList.toggle('active', b === button));
+    flush();
+  };
+});
+
+(async () => {
+  await loadScenario();
+  connect();
+  poll();
+  setInterval(poll, 500);
+  setInterval(tickRate, 250);
+})();
+</script>
+</body>
+</html>

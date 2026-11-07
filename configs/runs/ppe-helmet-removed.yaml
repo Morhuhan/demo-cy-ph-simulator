@@ -1,0 +1,57 @@
+# Каска снята после успешной проверки.
+#
+# Показывает, что система не «проверила на входе и забыла»: каска обязана
+# оставаться надетой до конца занятия. Снятие отслеживается инвариантом
+# и даёт критическое предупреждение с прерыванием текущей реплики.
+
+id: ppe-helmet-removed
+title: Каска снята во время работы
+scenario: ppe-01
+description: >-
+  Проверка пройдена, сотрудник допущен к работе, после чего снимает каску.
+  Ожидается немедленное критическое предупреждение. После возврата каски
+  работа продолжается.
+duration_sec: 34
+
+noise:
+  confidence_mean: 0.90
+  confidence_jitter: 0.05
+  flicker_prob: 0.02
+  unclear_prob: 0.01
+
+timeline:
+  - at: 2
+    note: Сотрудник в каске, проверка проходит
+    set:
+      helmet: "on"
+    transition_sec: 1.0
+
+  - at: 12
+    note: Сотрудник снял каску во время работы
+    set:
+      helmet: "off"
+    transition_sec: 0.8
+
+  - at: 21
+    note: Каска надета обратно
+    set:
+      helmet: "on"
+    transition_sec: 1.0
+
+  - at: 29
+    note: Доклад о готовности к работе
+    voice: ready_report
+
+expected:
+  - step: helmet_check
+    kind: MATCH
+    reason: step_completed
+  - step: helmet_check
+    kind: MISMATCH
+    reason: unexpected_state
+  - step: helmet_check
+    kind: MATCH
+    reason: step_completed
+  - step: ready_report
+    kind: MATCH
+    reason: step_completed

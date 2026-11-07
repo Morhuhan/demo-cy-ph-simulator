@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Пульт инструктора</title>
+<link rel="icon" href="logo-mark.svg">
+<style>
+:root {
+  --bg: #0d1114; --panel: #161c21; --panel-2: #1d252c; --line: #2a343d; --text: #e8eef2; --muted: #8a99a5;
+  --accent: #19b5ad; --ok: #2ecc71; --bad: #ff4d4f; --warn: #ffb020;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; font-size: 15px; }
+body { padding: 18px 20px 28px; max-width: 980px; margin: 0 auto; }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+header h1 { margin: 0; font-size: 20px; font-weight: 600; flex: 1; padding-left: 14px; border-left: 1px solid var(--line); }
+.logo { display: flex; align-items: center; gap: 9px; }
+.logo img { width: 38px; height: 38px; }
+.logo b { display: block; font-size: 21px; font-weight: 700; line-height: 1; }
+.logo span { display: block; font-size: 11px; font-weight: 700; color: #ef5a3c; margin-top: 2px; }
+/* поверх экрана тренажёра логотип уже есть в его шапке */
+body.embed .logo { display: none; }
+body.embed header h1 { padding-left: 0; border-left: 0; }
+.link { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.link i { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); }
+.link.on i { background: var(--ok); }
+#close { display: none; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 6px;
+  padding: 6px 10px; font: inherit; cursor: pointer; }
+body.embed #close { display: block; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+section h2 { margin: 0 0 10px; font-size: 12px; letter-spacing: .14em; color: var(--muted); font-weight: 700; }
+
+/* Сейчас на экране */
+.now { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.phase { padding: 4px 10px; border-radius: 5px; font-size: 13px; font-weight: 700; letter-spacing: .04em; background: var(--panel-2); }
+.phase.run { color: #001; background: var(--accent); } .phase.gate { color: #001; background: var(--warn); }
+.phase.done { color: #001; background: var(--ok); } .phase.off { color: var(--bad); }
+.now .what { font-size: 17px; font-weight: 600; }
+.step { margin-top: 8px; color: var(--muted); }
+.step b { color: var(--text); font-weight: 600; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); margin: 10px 0 12px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { padding: 5px 10px; border-radius: 5px; background: var(--panel-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.chip.ok { color: var(--ok); } .chip.bad { color: var(--bad); } .chip.muted { color: var(--muted); }
+
+/* Занятия */
+.lessons { display: grid; gap: 8px; }
+.lesson { display: block; text-align: left; width: 100%; padding: 11px 14px; border-radius: 8px; cursor: pointer;
+  background: var(--panel-2); border: 2px solid transparent; color: var(--text); font: inherit; }
+.lesson:hover { border-color: #3d4a55; }
+.lesson.sel { border-color: var(--accent); background: rgba(25,181,173,.08); }
+.lesson b { font-size: 16px; font-weight: 600; }
+.lesson span { display: block; color: var(--muted); font-size: 13px; margin-top: 3px; }
+
+/* Режимы */
+.modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.mode { --c: var(--accent); text-align: left; padding: 0; border-radius: 9px; overflow: hidden; cursor: pointer;
+  background: var(--panel-2); border: 2px solid transparent; color: var(--text); font: inherit; }
+.mode:hover { border-color: #3d4a55; }
+.mode .top { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 5px solid var(--c); }
+.mode .top b { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--c); color: var(--c); display: flex;
+  align-items: center; justify-content: center; font-size: 13px; }
+.mode .top span { font-size: 17px; font-weight: 700; }
+.mode p { margin: 0; padding: 0 12px 12px; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.mode.sel { border-color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--panel-2)); }
+.mode.sel .top b { background: var(--c); color: #001; }
+.mode.sel p { color: var(--text); }
+.mode.live::after { content: "сейчас на экране"; display: block; padding: 0 12px 10px; font-size: 11px; letter-spacing: .06em; color: var(--c); }
+
+/* Настройки */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.opt label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; padding: 9px 8px; border: 0; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.sel { background: var(--accent); color: #001; font-weight: 600; }
+.seg button:disabled { opacity: .4; cursor: default; }
+.opt small { display: block; color: var(--muted); font-size: 12px; margin-top: 6px; min-height: 30px; }
+
+.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.actions button { padding: 11px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--text); font: inherit; cursor: pointer; }
+.actions button.main { background: var(--accent); border-color: var(--accent); color: #001; font-weight: 700; }
+.actions button:hover:not(:disabled) { border-color: var(--accent); }
+.actions button:disabled { opacity: .4; cursor: default; }
+#note { color: var(--muted); font-size: 13px; margin-top: 10px; min-height: 18px; }
+#note.warn { color: var(--warn); }
+
+/* Журнал */
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 6px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 6px; border-bottom: 1px solid var(--line); }
+td.num, th.num { text-align: right; }
+.empty { color: var(--muted); padding: 10px 0; }
+.total { color: var(--muted); font-size: 13px; float: right; font-weight: 400; letter-spacing: 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><img src="logo-mark.svg" alt=""><div><b>Mentrica</b><span>ИИ-наставник</span></div></div>
+  <h1>Пульт инструктора</h1>
+  <div class="link" id="link"><i></i><span>нет связи с тренажёром</span></div>
+  <button id="close" title="Закрыть пульт (Esc)">✕</button>
+</header>
+
+<section>
+  <h2>СЕЙЧАС НА ЭКРАНЕ ТРЕНАЖЁРА</h2>
+  <div class="now"><span class="phase" id="phase">—</span><span class="what" id="what">Экран тренажёра не на связи</span></div>
+  <div class="step" id="step"></div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="chips" id="chips"></div>
+</section>
+
+<section>
+  <h2>ЗАНЯТИЕ</h2>
+  <div class="lessons" id="lessons"></div>
+</section>
+
+<section>
+  <h2>РЕЖИМ</h2>
+  <div class="modes" id="modes"></div>
+</section>
+
+<section>
+  <h2>ПАРАМЕТРЫ</h2>
+  <div class="grid">
+    <div class="opt"><label>Камера</label><div class="seg" id="view"></div><small id="viewNote"></small></div>
+    <div class="opt"><label>Проверка каски</label><div class="seg" id="helmet"></div><small id="helmetNote"></small></div>
+  </div>
+</section>
+
+<section>
+  <h2>УПРАВЛЕНИЕ</h2>
+  <div class="actions">
+    <button class="main" id="start">↻ Начать заново</button>
+    <button id="pause" disabled>⏸ Пауза</button>
+  </div>
+  <div id="note"></div>
+</section>
+
+<section>
+  <h2>ЖУРНАЛ ПРОХОЖДЕНИЙ <span class="total" id="total"></span></h2>
+  <div id="journal"></div>
+</section>
+
+<script type="module">
+import { LESSONS, MODES, MODE_ORDER, VIEWS } from './lessons.js';
+
+const $ = (id) => document.getElementById(id);
+const embed = new URLSearchParams(location.search).get('embed') === '1';
+document.body.classList.toggle('embed', embed);
+$('close').onclick = () => parent.postMessage('pult:close', location.origin);
+addEventListener('keydown', (e) => { if (e.code === 'Escape' && embed) parent.postMessage('pult:close', location.origin); });
+
+let state = { lesson: 'top-fill', mode: 'review', view: 'orbit', assume_helmet: null };
+let status = null;
+let statusAt = 0;
+const lessonOf = (id) => LESSONS.find((l) => l.id === id) || LESSONS[0];
+
+async function send(change) {
+  try {
+    const r = await fetch('/expo/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(change) });
+    if (!r.ok) throw new Error(r.status);
+    state = (await r.json()).state;
+    render();
+  } catch (err) {
+    note('Команда не дошла до тренажёра: ' + err.message, true);
+  }
+}
+
+function note(text, warn = false) { $('note').textContent = text; $('note').className = warn ? 'warn' : ''; }
+
+function seg(id, items, current, onPick, disabled = false) {
+  const el = $(id);
+  el.innerHTML = '';
+  for (const [key, title] of items) {
+    const b = document.createElement('button');
+    b.textContent = title;
+    b.className = key === current ? 'sel' : '';
+    b.disabled = disabled;
+    b.onclick = () => onPick(key);
+    el.appendChild(b);
+  }
+}
+
+function renderLessons() {
+  $('lessons').innerHTML = '';
+  for (const l of LESSONS.filter((x) => x.kind !== 'pending')) {
+    const b = document.createElement('button');
+    b.className = 'lesson' + (l.id === state.lesson ? ' sel' : '');
+    b.innerHTML = `<b>${l.title}</b><span>${l.note}</span>`;
+    b.onclick = () => send({ lesson: l.id });
+    $('lessons').appendChild(b);
+  }
+}
+
+// Режим — три карточки в порядке прохождения; выбранный ляжет на следующее
+// прохождение, идущий на экране помечен.
+function renderModes() {
+  const live = status && Date.now() - statusAt < 10000 && ['run', 'gate', 'pause', 'done'].includes(status.phase) ? status.mode : null;
+  $('modes').innerHTML = '';
+  for (const k of MODE_ORDER) {
+    const m = MODES[k];
+    const b = document.createElement('button');
+    b.className = 'mode' + (k === state.mode ? ' sel' : '') + (k === live ? ' live' : '');
+    b.style.setProperty('--c', m.color);
+    b.innerHTML = `<div class="top"><b>${m.n}</b><span>${m.title}</span></div><p>${m.note}</p>`;
+    b.onclick = () => send({ mode: k });
+    $('modes').appendChild(b);
+  }
+}
+
+function render() {
+  renderLessons();
+  renderModes();
+  seg('view', Object.entries(VIEWS).map(([k, v]) => [k, v.title]), state.view, (k) => send({ view: k }));
+  $('viewNote').textContent = VIEWS[state.view].note + ' · на экране — клавиша V';
+  const assume = typeof state.assume_helmet === 'boolean' ? state.assume_helmet : !!(status && /выключена/.test(status.helmet_source));
+  seg('helmet', [['cv', 'По камере'], ['off', 'Не проверять']], assume ? 'off' : 'cv', (k) => send({ assume_helmet: k === 'off' }));
+  $('helmetNote').textContent = assume ? 'Оператор считается в каске, сценарий не блокируется' : 'Без каски сценарий останавливается';
+  renderStatus();
+}
+
+const PHASES = {
+  splash: ['off', 'Ожидание старта'],
+  loading: ['off', 'Загрузка'],
+  idle: ['', 'Ожидание'],
+  gate: ['gate', 'Допуск'],
+  pause: ['gate', 'Пауза'],
+  run: ['run', 'Идёт занятие'],
+  done: ['done', 'Итог'],
+};
+
+function renderStatus() {
+  const live = status && Date.now() - statusAt < 10000;
+  $('link').classList.toggle('on', !!live);
+  $('link').lastElementChild.textContent = live ? 'тренажёр на связи' : 'нет связи с тренажёром';
+  if (!live) {
+    $('phase').className = 'phase off'; $('phase').textContent = '—';
+    $('what').textContent = status ? 'Экран тренажёра не отвечает' : 'Экран тренажёра не на связи: откройте /expo на компьютере тренажёра';
+    $('step').textContent = ''; $('chips').innerHTML = ''; $('bar').style.width = '0';
+    return;
+  }
+  const s = status;
+  // до первого старта кнопка — «Начать», дальше — «Начать заново»
+  $('start').textContent = s.phase === 'splash' ? '▶ Начать' : '↻ Начать заново';
+  // пауза — только посреди прохождения
+  $('pause').textContent = s.phase === 'pause' ? '▶ Продолжить' : '⏸ Пауза';
+  $('pause').disabled = !['run', 'pause'].includes(s.phase);
+  let [cls, text] = PHASES[s.phase] || ['', s.phase];
+  if (s.phase === 'gate' && s.seconds > 0) text = 'Пауза: нет допуска';
+  $('phase').className = 'phase ' + cls; $('phase').textContent = text;
+  const l = lessonOf(s.lesson);
+  $('what').textContent = l.title + (MODES[s.mode] ? ' · ' + MODES[s.mode].title.toLowerCase() : '');
+  const unit = s.mode === 'review' ? 'шаг' : 'этап';
+  if (['run', 'gate', 'pause'].includes(s.phase)) {
+    $('step').innerHTML = s.step_title ? `${unit} ${Math.min(s.step + 1, s.steps_total)} из ${s.steps_total}: <b>${s.step_title}</b>` : 'ждём оператора перед камерой';
+  } else if (s.phase === 'done') {
+    $('step').textContent = 'Прохождение завершено, итог на экране';
+  } else if (s.phase === 'splash') {
+    $('step').textContent = 'Выберите занятие и режим и нажмите «Начать».';
+  } else $('step').textContent = '';
+  $('bar').style.width = (s.steps_total ? Math.min(100, (s.phase === 'done' ? 1 : s.step / s.steps_total) * 100) : 0) + '%';
+  const mm = `${Math.floor(s.seconds / 60)}:${String(s.seconds % 60).padStart(2, '0')}`;
+  $('chips').innerHTML = [
+    [s.present ? 'ok' : 'muted', s.present ? 'оператор в кадре' : 'оператора нет'],
+    [!s.present ? 'muted' : s.helmet ? 'ok' : 'bad', s.helmet ? 'каска обнаружена ✓' : 'каска не обнаружена'],
+    [s.mode === 'review' ? 'muted' : s.errors ? 'bad' : 'ok', `ошибок: ${s.errors}`],
+    ['muted', `вопросов: ${s.asks}`],
+    ['muted', `время ${mm}`],
+    ['muted', s.view === 'eye' ? 'от первого лица' : 'со стороны'],
+    ['muted', s.helmet_source || ''],
+  ].filter(([, t]) => t).map(([c, t]) => `<span class="chip ${c}">${t}</span>`).join('');
+  // занятие на пульте выбрано, а на экране ещё идёт прежнее
+  if (s.phase === 'run' && (s.lesson !== state.lesson || s.mode !== state.mode)) {
+    note('Выбранные занятие и режим начнутся с «Начать заново» — сейчас на экране идёт прохождение.', true);
+  } else if ($('note').className === 'warn' && /Выбранные занятие/.test($('note').textContent)) note('');
+}
+
+const MODE_TITLE = { review: 'обзор', training: 'обучение', exam: 'экзамен', tour: 'обзор' };
+async function loadJournal() {
+  try {
+    const r = await (await fetch('/expo/results?limit=15')).json();
+    $('total').textContent = r.count ? `всего ${r.count}` : '';
+    if (!r.items.length) { $('journal').innerHTML = '<div class="empty">Прохождений пока нет</div>'; return; }
+    $('journal').innerHTML = `<table><tr><th>Когда</th><th>Занятие</th><th>Режим</th><th>Итог</th><th class="num">Этапы</th>
+      <th class="num">Ошибки</th><th class="num">СИЗ</th><th class="num">Вопросы</th><th class="num">Время</th></tr>
+      ${r.items.map((x) => {
+        const t = new Date(x.ts);
+        const when = t.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + t.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const l = x.lesson ? lessonOf(x.lesson).title : 'Верхний налив ЛВЖ';
+        const verdict = x.passed === true ? '<span class="chip ok">зачёт</span>' : x.passed === false ? '<span class="chip bad">незачёт</span>' : '—';
+        return `<tr><td>${when}</td><td>${l}</td><td>${MODE_TITLE[x.mode] || '—'}</td><td>${verdict}</td><td class="num">${x.steps_done}/${x.steps_total}</td>
+          <td class="num">${x.mode === 'tour' || x.mode === 'review' ? '—' : x.errors}</td><td class="num">${x.ppe_violations ? '✕ ' + x.ppe_violations : '✓'}</td>
+          <td class="num">${x.asks}</td><td class="num">${Math.floor(x.seconds / 60)}:${String(x.seconds % 60).padStart(2, '0')}</td></tr>`;
+      }).join('')}</table>`;
+  } catch (_) {
+    $('journal').innerHTML = '<div class="empty">Журнал недоступен</div>';
+  }
+}
+
+$('start').onclick = () => {
+  send({ command: 'start' }); note(`Режим «${MODES[state.mode].title}»: экран ждёт оператора в каске.`);
+};
+$('pause').onclick = () => {
+  const resume = status && status.phase === 'pause';
+  send({ command: resume ? 'resume' : 'pause' });
+  note(resume ? 'Занятие продолжено.' : 'Занятие на паузе: сцена и время остановлены.');
+};
+
+function connect() {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/expo/live`);
+  ws.onmessage = (m) => {
+    const msg = JSON.parse(m.data);
+    if (msg.type === 'control') { state = msg.state; render(); }
+    else if (msg.type === 'status') {
+      const was = status && status.phase;
+      status = msg.status; statusAt = Date.now();
+      render();
+      if (status.phase === 'done' && was !== 'done') setTimeout(loadJournal, 1500);
+    }
+  };
+  ws.onclose = () => setTimeout(connect, 1500);
+}
+
+render();
+loadJournal();
+connect();
+setInterval(renderStatus, 2000);
+setInterval(loadJournal, 20000);
+</script>
+</body>
+</html>

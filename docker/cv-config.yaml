@@ -1,0 +1,56 @@
+# Конфигурация модуля распознавания в контейнере.
+#
+# Подключается томом в docker-compose.full.yml: пороги стабилизации и
+# устройство меняются без пересборки, достаточно перезапустить контейнер.
+# Источник видео задаётся не здесь, а переменной CV_SOURCE.
+
+camera:
+  id: hmd-01
+  source: 0
+  target_inference_fps: 12
+
+model:
+  path: models/yolo11m_safety.pt
+  imgsz: 640
+  confidence: 0.50
+  # 0 — первая видеокарта; без неё — cpu.
+  device: 0
+  version: ppe-yolo11m-v1
+
+helmet:
+  positive_class: hat
+  negative_class: nohat
+  head_region_ratio: 0.45
+  temporal_window: 10
+  confirm_ratio: 0.70
+  min_valid_observations: 5
+  min_confidence: 0.50
+
+tracking:
+  min_iou: 0.30
+  max_missed_frames: 15
+
+stream:
+  no_data_timeout_sec: 2.0
+  reconnect_interval_sec: 2.0
+  heartbeat_interval_sec: 1.0
+
+transport:
+  type: websocket
+  # Стенд — соседний контейнер, по имени сервиса.
+  url: ws://stand:8080/cv?stand=demo
+
+# Видео с рамками для страницы проверки. Внутри контейнера слушать надо на
+# всех адресах, иначе проброшенный порт никуда не ведёт; наружу он открыт
+# только для этой машины — см. ports в docker-compose.full.yml.
+preview:
+  enabled: true
+  host: 0.0.0.0
+  port: 8081
+
+debug:
+  draw_boxes: true
+  show_window: false
+
+logging:
+  level: INFO

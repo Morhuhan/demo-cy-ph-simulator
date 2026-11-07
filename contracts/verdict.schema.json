@@ -1,0 +1,139 @@
+{
+  "$defs": {
+    "ReasonCode": {
+      "description": "Машиночитаемая причина вердикта.\n\nОтделена от `message`, потому что текст меняется (в том числе если реплики\nначнёт формулировать LLM), а отчётность и метрики должны опираться\nна стабильный код.",
+      "enum": [
+        "step_completed",
+        "precondition_violated",
+        "out_of_order",
+        "unexpected_state",
+        "low_confidence",
+        "stream_lost",
+        "step_timeout"
+      ],
+      "title": "ReasonCode",
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "info",
+        "warning",
+        "critical"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "VerdictKind": {
+      "enum": [
+        "MATCH",
+        "MISMATCH",
+        "UNCLEAR",
+        "TIMEOUT"
+      ],
+      "title": "VerdictKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Решение сценарного движка.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "description": "Версия контракта. Мажорная часть — признак совместимости.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Уникальный идентификатор сообщения",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "ts": {
+      "description": "Момент формирования сообщения, UTC",
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "step_id": {
+      "description": "Шаг СОП, к которому относится вердикт",
+      "title": "Step Id",
+      "type": "string"
+    },
+    "step_index": {
+      "description": "Порядковый номер шага, 0 — вне шагов",
+      "minimum": 0,
+      "title": "Step Index",
+      "type": "integer"
+    },
+    "kind": {
+      "$ref": "#/$defs/VerdictKind"
+    },
+    "severity": {
+      "$ref": "#/$defs/Severity"
+    },
+    "reason_code": {
+      "$ref": "#/$defs/ReasonCode"
+    },
+    "confidence": {
+      "description": "Уверенность в вердикте. Наследуется от подтверждённого состояния.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "message": {
+      "description": "Человекочитаемая формулировка для журнала инструктора",
+      "title": "Message",
+      "type": "string"
+    },
+    "details": {
+      "description": "Контекст: какая переменная, какое значение, какие предусловия нарушены",
+      "title": "Details",
+      "type": "object"
+    },
+    "source_event_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "event_id состояния, вызвавшего вердикт. Сквозная трассировка до кадра.",
+      "title": "Source Event Id"
+    },
+    "latency_ms": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Задержка от frame_ts исходного кадра до вердикта. Это измеряемая часть бюджета из п. 6.2 ТЗ, приходящаяся на сценарную часть.",
+      "title": "Latency Ms"
+    }
+  },
+  "required": [
+    "session_id",
+    "step_id",
+    "step_index",
+    "kind",
+    "severity",
+    "reason_code",
+    "confidence",
+    "message"
+  ],
+  "title": "verdict",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

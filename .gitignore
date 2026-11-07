@@ -1,0 +1,37 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Локальные данные стенда: база, кэш синтезированной речи, кольцевой буфер видео.
+data/
+
+.pytest_cache/
+.ruff_cache/
+.idea/
+.vscode/
+
+# Исходные материалы и устаревшие документы: держим локально, в репозиторий не кладём.
+_archive/
+
+# Тяжёлое и личное: веса модели, ролики, архивы, отчёты заказчику.
+*.pt
+*.mp4
+*.zip
+/*.pdf
+/*.docx
+/events.jsonl
+отчёты/
+
+# Локальное окружение и служебные артефакты.
+.local/cv-venv/
+.local/logs/
+.local/voice-samples/
+.playwright-mcp/
+configs/cv-logs/
+
+# Внутренние материалы проекта: договор, участники, ТЗ и концепты для заказчика.
+CONTEXT.md
+docs/reference/
+docs/instructor-ui/

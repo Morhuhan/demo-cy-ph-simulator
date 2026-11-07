@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка СИЗ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310131a'/%3E%3Ccircle cx='16' cy='11' r='5' fill='%2335c46a'/%3E%3Crect x='14' y='17' width='4' height='11' rx='1' fill='%234a9eff'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: dark;
+  --bg-deep: #05070c;
+  --bg-base: #0a0d12;
+  --bg-raised: #0f141c;
+  --bg-panel: #161d2b;
+  --line: #232a33;
+  --text: #e7eaef;
+  --muted: #7f8896;
+  --accent: #38bdf8;
+  --ok: #3fbf6f;
+  --crit: #e8544c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg-deep); color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 14px; line-height: 1.55;
+}
+
+header {
+  display: flex; align-items: center; gap: 20px;
+  padding: 20px 32px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--line);
+}
+h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.session-badge {
+  font-size: 11px; padding: 4px 10px;
+  background: var(--bg-raised); border-radius: 999px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+.session-badge.running { color: var(--ok); }
+.session-badge.finished { color: var(--accent); }
+.spacer { flex: 1; }
+
+.controls {
+  display: flex; gap: 12px; align-items: center;
+  padding: 12px 32px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--line);
+}
+button {
+  background: var(--bg-raised); color: var(--text);
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 8px 16px; font: inherit; font-size: 13px;
+  cursor: pointer; transition: all 0.15s;
+}
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--bg-panel);
+}
+button:disabled { opacity: .35; cursor: not-allowed; }
+button.primary {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--bg-deep); font-weight: 500;
+}
+button.primary:hover:not(:disabled) {
+  background: #22a9d8; border-color: #22a9d8;
+}
+button.danger { border-color: var(--crit); color: var(--crit); }
+
+main {
+  display: grid; grid-template-columns: 1fr 400px;
+  gap: 32px; padding: 32px;
+  min-height: calc(100vh - 140px);
+}
+@media (max-width: 1200px) {
+  main { grid-template-columns: 1fr; }
+}
+
+.video-panel {
+  background: var(--bg-base); border-radius: 8px;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.video-container {
+  position: relative;
+  background: var(--bg-deep);
+  border-radius: 6px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+#frame {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  display: none;
+}
+#frame.active { display: block; }
+.video-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%;
+  color: var(--muted); font-size: 14px;
+}
+.video-status {
+  display: flex; gap: 20px;
+  font-size: 12px; color: var(--muted);
+}
+.video-status > div {
+  display: flex; align-items: center; gap: 6px;
+}
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.status-dot.active { background: var(--ok); }
+
+.state-panel {
+  display: flex; flex-direction: column; gap: 20px;
+}
+.state-card {
+  background: var(--bg-base); border-radius: 8px;
+  padding: 20px;
+}
+.state-card h2 {
+  margin: 0 0 12px;
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+
+.helmet-status {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 20px;
+  align-items: center;
+}
+.helmet-indicator {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  background: var(--bg-raised);
+  grid-row: 1 / 3;
+}
+.helmet-indicator.ok { background: rgba(63, 191, 111, 0.15); }
+.helmet-indicator.violation { background: rgba(232, 84, 76, 0.15); }
+.helmet-indicator.unclear { background: rgba(139, 125, 224, 0.15); }
+.helmet-label { font-size: 13px; color: var(--muted); }
+.helmet-value { font-size: 16px; font-weight: 500; }
+.helmet-value.ok { color: var(--ok); }
+.helmet-value.violation { color: var(--crit); }
+.helmet-value.unclear { color: var(--muted); }
+
+#journal {
+  max-height: 400px; overflow-y: auto;
+  font-size: 12px;
+}
+#journal:empty::before {
+  content: "Журнал пуст";
+  color: var(--muted);
+  display: block;
+  padding: 12px 0;
+}
+.entry {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.entry:last-child { border-bottom: none; }
+.entry-head {
+  display: flex; justify-content: space-between;
+  align-items: baseline; margin-bottom: 4px;
+}
+.entry-time {
+  font-family: ui-monospace, monospace;
+  font-size: 11px; color: var(--muted);
+}
+.entry-badge {
+  font-size: 10px; padding: 2px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  font-weight: 500;
+}
+.entry-badge.ok {
+  background: rgba(63, 191, 111, 0.15);
+  color: var(--ok);
+}
+.entry-badge.violation {
+  background: rgba(232, 84, 76, 0.15);
+  color: var(--crit);
+}
+.entry-badge.info {
+  background: var(--bg-raised);
+  color: var(--muted);
+}
+.entry-text { color: var(--text); line-height: 1.5; }
+
+.voice-card {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.voice-controls { display: flex; gap: 12px; }
+.voice-controls button { flex: 1; }
+#mic-heard {
+  padding: 12px; background: var(--bg-raised);
+  border-radius: 4px; font-size: 12px;
+  color: var(--muted); min-height: 60px;
+  display: flex; align-items: center;
+}
+#mic-heard:empty::before {
+  content: "Результат распознавания";
+}
+#mic-heard.active { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Проверка СИЗ</h1>
+  <span class="session-badge" id="session-status">готов</span>
+  <div class="spacer"></div>
+  <span id="session-id" style="font-size: 11px; color: var(--muted);"></span>
+</header>
+
+<div class="controls">
+  <button class="primary" id="btn-start">Начать проверку</button>
+  <button id="btn-abort" disabled>Прервать</button>
+  <div class="spacer"></div>
+  <button id="btn-ready">Готов к работе</button>
+</div>
+
+<main>
+  <div class="video-panel">
+    <div class="video-container">
+      <canvas id="frame"></canvas>
+      <div class="video-placeholder" id="no-stream">Ожидание видеопотока…</div>
+    </div>
+    <div class="video-status">
+      <div>
+        <span class="status-dot" id="cv-dot"></span>
+        <span id="cv-status">CV-модуль</span>
+      </div>
+      <div>
+        <span class="status-dot" id="stream-dot"></span>
+        <span id="stream-status">Видео</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-panel">
+    <div class="state-card">
+      <h2>Состояние</h2>
+      <div class="helmet-status">
+        <div class="helmet-indicator" id="helmet-icon">🪖</div>
+        <div class="helmet-label">Каска</div>
+        <div class="helmet-value" id="helmet-state">—</div>
+      </div>
+    </div>
+
+    <div class="state-card voice-card">
+      <h2>Голосовые команды</h2>
+      <div class="voice-controls">
+        <button id="btn-test-voice">Проверить микрофон</button>
+      </div>
+      <div id="mic-heard"></div>
+    </div>
+
+    <div class="state-card">
+      <h2>Журнал</h2>
+      <div id="journal"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// === Состояние ===
+let sessionId = null;
+let ws = null;
+let pollTimer = null;
+let frameTimer = null;
+let audioRecorder = null;
+let testMode = false;
+
+const $sessionStatus = document.getElementById('session-status');
+const $sessionId = document.getElementById('session-id');
+const $btnStart = document.getElementById('btn-start');
+const $btnAbort = document.getElementById('btn-abort');
+const $btnReady = document.getElementById('btn-ready');
+const $btnTestVoice = document.getElementById('btn-test-voice');
+const $helmetIcon = document.getElementById('helmet-icon');
+const $helmetState = document.getElementById('helmet-state');
+const $journal = document.getElementById('journal');
+const $frame = document.getElementById('frame');
+const $noStream = document.getElementById('no-stream');
+const $cvDot = document.getElementById('cv-dot');
+const $cvStatus = document.getElementById('cv-status');
+const $streamDot = document.getElementById('stream-dot');
+const $streamStatus = document.getElementById('stream-status');
+const $micHeard = document.getElementById('mic-heard');
+
+// === Инициализация ===
+init();
+
+function init() {
+  $btnStart.onclick = startSession;
+  $btnAbort.onclick = abortSession;
+  $btnReady.onclick = sendReady;
+  $btnTestVoice.onclick = toggleTestVoice;
+
+  loadState();
+  startPolling();
+  connectWebSocket();
+}
+
+async function loadState() {
+  try {
+    const res = await fetch('/state');
+    const state = await res.json();
+    sessionId = state.session_id;
+    $sessionId.textContent = `Сеанс ${sessionId.slice(0, 8)}`;
+    updateControls(state.mode, state.phase);
+    updateState(state.variables);
+
+    if (state.verdicts && state.verdicts.length > 0) {
+      state.verdicts.slice(-20).forEach(v => addJournalEntry(v));
+    }
+  } catch (e) {
+    console.error('Не удалось загрузить состояние:', e);
+  }
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(loadState, 1000);
+}
+
+function connectWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    console.log('WebSocket подключён');
+  };
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'verdict') {
+      addJournalEntry(msg.data);
+    } else if (msg.type === 'state') {
+      updateState(msg.data.variables);
+      updateControls(msg.data.mode, msg.data.phase);
+    } else if (msg.type === 'frame') {
+      drawFrame(msg.data);
+    }
+  };
+
+  ws.onerror = (e) => {
+    console.error('Ошибка WebSocket:', e);
+  };
+
+  ws.onclose = () => {
+    console.log('WebSocket закрыт, переподключение через 3с');
+    setTimeout(connectWebSocket, 3000);
+  };
+}
+
+// === Управление сеансом ===
+async function startSession() {
+  try {
+    await fetch('/start', { method: 'POST' });
+    loadState();
+  } catch (e) {
+    console.error('Не удалось начать:', e);
+  }
+}
+
+async function abortSession() {
+  if (!confirm('Прервать проверку?')) return;
+  try {
+    await fetch('/abort', { method: 'POST' });
+    loadState();
+  } catch (e) {
+    console.error('Не удалось прервать:', e);
+  }
+}
+
+async function sendReady() {
+  try {
+    await fetch('/command/ready_report', { method: 'POST' });
+  } catch (e) {
+    console.error('Не удалось отправить команду:', e);
+  }
+}
+
+function updateControls(mode, phase) {
+  const running = mode === 'training' && phase === 'running';
+  $btnStart.disabled = running;
+  $btnAbort.disabled = !running;
+  $btnReady.disabled = !running;
+
+  $sessionStatus.className = 'session-badge';
+  if (running) {
+    $sessionStatus.textContent = 'Проверка';
+    $sessionStatus.classList.add('running');
+  } else if (phase === 'finished') {
+    $sessionStatus.textContent = 'Завершено';
+    $sessionStatus.classList.add('finished');
+  } else {
+    $sessionStatus.textContent = 'Готов';
+  }
+}
+
+// === Отображение состояния ===
+function updateState(variables) {
+  const helmet = variables?.helmet;
+  if (!helmet) return;
+
+  const { value, confidence } = helmet;
+  const confPct = Math.round(confidence * 100);
+
+  $helmetIcon.className = 'helmet-indicator';
+  $helmetState.className = 'helmet-value';
+
+  if (value === true) {
+    $helmetIcon.classList.add('ok');
+    $helmetIcon.textContent = '✓';
+    $helmetState.classList.add('ok');
+    $helmetState.textContent = `Есть (${confPct}%)`;
+  } else if (value === false) {
+    $helmetIcon.classList.add('violation');
+    $helmetIcon.textContent = '✗';
+    $helmetState.classList.add('violation');
+    $helmetState.textContent = `Нет (${confPct}%)`;
+  } else {
+    $helmetIcon.classList.add('unclear');
+    $helmetIcon.textContent = '?';
+    $helmetState.classList.add('unclear');
+    $helmetState.textContent = 'Неопределённо';
+  }
+}
+
+// === Журнал ===
+function addJournalEntry(verdict) {
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+
+  const time = new Date(verdict.timestamp).toLocaleTimeString('ru-RU');
+  const kind = verdict.kind === 'success' ? 'ok' : verdict.kind === 'violation' ? 'violation' : 'info';
+
+  entry.innerHTML = `
+    <div class="entry-head">
+      <span class="entry-time">${time}</span>
+      <span class="entry-badge ${kind}">${verdict.step_title || verdict.kind}</span>
+    </div>
+    <div class="entry-text">${verdict.message}</div>
+  `;
+
+  $journal.appendChild(entry);
+  $journal.scrollTop = $journal.scrollHeight;
+
+  while ($journal.children.length > 50) {
+    $journal.removeChild($journal.firstChild);
+  }
+}
+
+// === Видео ===
+function drawFrame(data) {
+  if (!data.frame) return;
+
+  $noStream.style.display = 'none';
+  $frame.classList.add('active');
+  $streamDot.classList.add('active');
+  $streamStatus.textContent = `${data.width}×${data.height}`;
+
+  const img = new Image();
+  img.onload = () => {
+    const ctx = $frame.getContext('2d');
+    $frame.width = data.width;
+    $frame.height = data.height;
+    ctx.drawImage(img, 0, 0);
+
+    if (data.boxes) {
+      data.boxes.forEach(box => {
+        ctx.strokeStyle = box.label === 'helmet' ? '#3fbf6f' : '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+
+        ctx.fillStyle = box.label === 'helmet' ? '#3fbf6f' : '#38bdf8';
+        ctx.font = '14px system-ui';
+        const text = `${box.label} ${Math.round(box.confidence * 100)}%`;
+        const metrics = ctx.measureText(text);
+        ctx.fillRect(box.x, box.y - 22, metrics.width + 8, 20);
+        ctx.fillStyle = '#000';
+        ctx.fillText(text, box.x + 4, box.y - 6);
+      });
+    }
+  };
+  img.src = `data:image/jpeg;base64,${data.frame}`;
+
+  if (frameTimer) clearTimeout(frameTimer);
+  frameTimer = setTimeout(() => {
+    $streamDot.classList.remove('active');
+    $streamStatus.textContent = 'Потерян';
+  }, 3000);
+}
+
+setInterval(async () => {
+  try {
+    const res = await fetch('/cv/status');
+    const status = await res.json();
+    if (status.connected) {
+      $cvDot.classList.add('active');
+      $cvStatus.textContent = 'Подключён';
+    } else {
+      $cvDot.classList.remove('active');
+      $cvStatus.textContent = 'Отключён';
+    }
+  } catch (e) {
+    $cvDot.classList.remove('active');
+    $cvStatus.textContent = 'Ошибка';
+  }
+}, 2000);
+
+// === Голос ===
+async function toggleTestVoice() {
+  testMode = !testMode;
+
+  if (testMode) {
+    $btnTestVoice.textContent = 'Остановить';
+    $btnTestVoice.style.borderColor = 'var(--accent)';
+    $btnTestVoice.style.color = 'var(--accent)';
+    startMicrophone(true);
+  } else {
+    $btnTestVoice.textContent = 'Проверить микрофон';
+    $btnTestVoice.style.borderColor = '';
+    $btnTestVoice.style.color = '';
+    stopMicrophone();
+    $micHeard.textContent = '';
+    $micHeard.classList.remove('active');
+  }
+}
+
+async function startMicrophone(isDryRun) {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    const chunks = [];
+
+    audioRecorder.ondataavailable = e => chunks.push(e.data);
+    audioRecorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      await sendAudio(blob, isDryRun);
+      chunks.length = 0;
+      if (testMode || !isDryRun) {
+        setTimeout(() => audioRecorder?.start(), 100);
+      }
+    };
+
+    audioRecorder.start();
+    setTimeout(() => audioRecorder.stop(), 3000);
+
+    $micHeard.textContent = 'Слушаю...';
+    $micHeard.classList.add('active');
+  } catch (e) {
+    console.error('Микрофон недоступен:', e);
+    $micHeard.textContent = `Ошибка: ${e.message}`;
+    testMode = false;
+    $btnTestVoice.textContent = 'Проверить микрофон';
+    $btnTestVoice.style.borderColor = '';
+    $btnTestVoice.style.color = '';
+  }
+}
+
+function stopMicrophone() {
+  if (audioRecorder) {
+    audioRecorder.stream.getTracks().forEach(t => t.stop());
+    audioRecorder = null;
+  }
+}
+
+async function sendAudio(blob, isDryRun) {
+  try {
+    const ctx = new AudioContext({ sampleRate: 16000 });
+    const buffer = await blob.arrayBuffer();
+    const decoded = await ctx.decodeAudioData(buffer);
+    const wav = audioBufferToWav(decoded);
+
+    const url = isDryRun ? '/voice/listen?dry_run=true' : '/voice/listen';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'audio/wav' },
+      body: wav
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      const text = result.transcript || '(тишина)';
+      const intent = result.intent || 'unknown';
+      const conf = Math.round((result.confidence || 0) * 100);
+
+      if (isDryRun) {
+        $micHeard.textContent = `"${text}" → ${intent} (${conf}%)`;
+      } else {
+        $micHeard.textContent = `Распознано: ${intent}`;
+        setTimeout(() => {
+          $micHeard.textContent = '';
+          $micHeard.classList.remove('active');
+        }, 3000);
+      }
+    } else {
+      const error = await res.text();
+      $micHeard.textContent = `Ошибка: ${error}`;
+    }
+  } catch (e) {
+    console.error('Ошибка отправки:', e);
+    $micHeard.textContent = `Ошибка: ${e.message}`;
+  }
+}
+
+function audioBufferToWav(buffer) {
+  const numChannels = 1;
+  const sampleRate = buffer.sampleRate;
+  const format = 1;
+  const bitDepth = 16;
+
+  const samples = buffer.getChannelData(0);
+  const dataLength = samples.length * (bitDepth / 8);
+  const arrayBuffer = new ArrayBuffer(44 + dataLength);
+  const view = new DataView(arrayBuffer);
+
+  const writeString = (offset, string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + dataLength, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
+  view.setUint16(32, numChannels * (bitDepth / 8), true);
+  view.setUint16(34, bitDepth, true);
+  writeString(36, 'data');
+  view.setUint32(40, dataLength, true);
+
+  const volume = 0.8;
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    offset += 2;
+  }
+
+  return arrayBuffer;
+}
+</script>
+
+</body>
+</html>

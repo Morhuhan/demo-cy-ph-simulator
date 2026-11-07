@@ -1,0 +1,72 @@
+{
+  "$defs": {
+    "StreamState": {
+      "description": "Состояние видеопотока со стороны CV.",
+      "enum": [
+        "online",
+        "degraded",
+        "lost"
+      ],
+      "title": "StreamState",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Сообщение CV о состоянии видеопотока.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "description": "Версия контракта. Мажорная часть — признак совместимости.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Уникальный идентификатор сообщения",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "ts": {
+      "description": "Момент формирования сообщения, UTC",
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "camera_id": {
+      "title": "Camera Id",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/StreamState"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Человекочитаемая причина",
+      "examples": [
+        "обрыв RTSP-соединения",
+        "засветка",
+        "обмерзание оптики"
+      ],
+      "title": "Reason"
+    }
+  },
+  "required": [
+    "source",
+    "camera_id",
+    "state"
+  ],
+  "title": "stream-health",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

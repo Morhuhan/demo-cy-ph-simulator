@@ -1,0 +1,445 @@
+{
+  "$defs": {
+    "Expectation": {
+      "additionalProperties": false,
+      "description": "Условие завершения шага.\n\nРовно одна форма из двух: либо состояние оборудования, либо голосовая\nкоманда оператора (седьмой шаг СОП камерой не наблюдается).",
+      "properties": {
+        "variable": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Variable"
+        },
+        "equals": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Equals"
+        },
+        "voice_intent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VoiceIntent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "Expectation",
+      "type": "object"
+    },
+    "Invariant": {
+      "additionalProperties": false,
+      "description": "Условие, которое должно соблюдаться после определённого шага и до конца сценария.\n\nПример: заземление, подключённое на шаге 1, не должно пропасть на шаге 5.\nБез этого движок принял бы «лампа погасла» просто за смену состояния.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "after_step": {
+          "description": "С какого шага условие начинает действовать",
+          "title": "After Step",
+          "type": "string"
+        },
+        "variable": {
+          "title": "Variable",
+          "type": "string"
+        },
+        "must_equal": {
+          "title": "Must Equal",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "default": "critical"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "after_step",
+        "variable",
+        "must_equal",
+        "message"
+      ],
+      "title": "Invariant",
+      "type": "object"
+    },
+    "Observable": {
+      "additionalProperties": false,
+      "description": "Наблюдаемая переменная состояния оборудования — единица работы CV-модуля.",
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ObservableValue"
+          },
+          "minProperties": 2,
+          "title": "Values",
+          "type": "object"
+        },
+        "initial": {
+          "description": "Состояние в начале сценария",
+          "title": "Initial",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Пояснение для CV-команды: что именно смотреть в кадре",
+          "title": "Description"
+        }
+      },
+      "required": [
+        "title",
+        "values",
+        "initial"
+      ],
+      "title": "Observable",
+      "type": "object"
+    },
+    "ObservableValue": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "description": "Как называть значение в журнале и в речи",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "ObservableValue",
+      "type": "object"
+    },
+    "ScenarioPhrases": {
+      "additionalProperties": false,
+      "properties": {
+        "welcome": {
+          "title": "Welcome",
+          "type": "string"
+        },
+        "finished": {
+          "title": "Finished",
+          "type": "string"
+        },
+        "aborted": {
+          "title": "Aborted",
+          "type": "string"
+        },
+        "unclear": {
+          "description": "Когда система не разобрала происходящее",
+          "title": "Unclear",
+          "type": "string"
+        },
+        "stream_lost": {
+          "description": "Когда пропал видеопоток",
+          "title": "Stream Lost",
+          "type": "string"
+        },
+        "help_fallback": {
+          "description": "Ответ на «помощь», если у шага нет своей подсказки",
+          "title": "Help Fallback",
+          "type": "string"
+        }
+      },
+      "required": [
+        "welcome",
+        "finished",
+        "aborted",
+        "unclear",
+        "stream_lost",
+        "help_fallback"
+      ],
+      "title": "ScenarioPhrases",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "info",
+        "warning",
+        "critical"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "SopStep": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "description": "Формулировка шага из регламента",
+          "title": "Title",
+          "type": "string"
+        },
+        "expect": {
+          "description": "Все условия должны выполниться",
+          "items": {
+            "$ref": "#/$defs/Expectation"
+          },
+          "minItems": 1,
+          "title": "Expect",
+          "type": "array"
+        },
+        "requires": {
+          "description": "Шаги, без которых этот выполнять нельзя. Нарушение — критическая блокировка, а не просто нарушение порядка.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Requires",
+          "type": "array"
+        },
+        "critical": {
+          "default": false,
+          "description": "Шаг с явными последствиями ошибки по регламенту",
+          "title": "Critical",
+          "type": "boolean"
+        },
+        "timeout_sec": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Сторожевой таймер шага. Задаётся индивидуально: шаг 6 — минуты кручения лебёдки, шаг 2 — секунды. Общий таймаут давал бы ложные TIMEOUT.",
+          "title": "Timeout Sec"
+        },
+        "min_confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Порог уверенности для зачёта шага; ниже — вердикт UNCLEAR",
+          "title": "Min Confidence"
+        },
+        "accept_current_state": {
+          "default": false,
+          "description": "Шаг проверяет состояние, а не действие: условие, уже выполненное на старте занятия, засчитывается сразу. Проверка каски проходит, даже если сотрудник встал перед камерой уже в ней. Для шагов-действий (подключить заземление) не годится: там важно само действие.",
+          "title": "Accept Current State",
+          "type": "boolean"
+        },
+        "consequence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Последствие ошибки по регламенту. Идёт в голос и в отчёт.",
+          "title": "Consequence"
+        },
+        "phrases": {
+          "$ref": "#/$defs/StepPhrases"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "expect",
+        "phrases"
+      ],
+      "title": "SopStep",
+      "type": "object"
+    },
+    "StepPhrases": {
+      "additionalProperties": false,
+      "description": "Реплики ассистента вокруг шага.\n\nПостоянные фразы кэшируются и прогреваются при старте, поэтому держать их\nздесь, а не собирать в рантайме, — ещё и вопрос задержки.",
+      "properties": {
+        "instruction": {
+          "description": "Что делать. Звучит в учебном и демо-режимах.",
+          "title": "Instruction",
+          "type": "string"
+        },
+        "success": {
+          "description": "Подтверждение выполнения",
+          "title": "Success",
+          "type": "string"
+        },
+        "violation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Что сказать, если шаг сделан с нарушением предусловий",
+          "title": "Violation"
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ответ на команду «помощь»",
+          "title": "Hint"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Что сказать по сторожевому таймеру",
+          "title": "Timeout"
+        }
+      },
+      "required": [
+        "instruction",
+        "success"
+      ],
+      "title": "StepPhrases",
+      "type": "object"
+    },
+    "VoiceIntent": {
+      "enum": [
+        "repeat",
+        "help",
+        "ready_report",
+        "unknown"
+      ],
+      "title": "VoiceIntent",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Схема машиночитаемого СОП (YAML-файлы в configs/sop/).",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "scenario_code": {
+      "description": "Код сценария по п. 4.1 ТЗ",
+      "examples": [
+        "КФТ-01"
+      ],
+      "title": "Scenario Code",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "source_document": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Регламент-источник, для прослеживаемости на приёмке",
+      "title": "Source Document"
+    },
+    "observables": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Observable"
+      },
+      "minProperties": 1,
+      "title": "Observables",
+      "type": "object"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/SopStep"
+      },
+      "minItems": 1,
+      "title": "Steps",
+      "type": "array"
+    },
+    "invariants": {
+      "items": {
+        "$ref": "#/$defs/Invariant"
+      },
+      "title": "Invariants",
+      "type": "array"
+    },
+    "phrases": {
+      "$ref": "#/$defs/ScenarioPhrases"
+    }
+  },
+  "required": [
+    "id",
+    "scenario_code",
+    "title",
+    "observables",
+    "steps",
+    "phrases"
+  ],
+  "title": "sop",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,82 @@
+# Эталонный прогон: оператор выполняет все семь шагов правильно.
+# Базовая линия для замера задержки и проверки, что система не выдумывает ошибок
+# там, где их нет.
+
+id: clean
+title: Чистый прогон
+scenario: kft-01
+description: Все семь шагов в правильном порядке, качество распознавания хорошее.
+duration_sec: 52
+
+noise:
+  confidence_mean: 0.88
+  confidence_jitter: 0.06
+  flicker_prob: 0.02
+  unclear_prob: 0.01
+
+timeline:
+  - at: 1
+    note: Оператор подошёл к посту налива
+
+  - at: 3
+    note: Шаг 1 — подключение заземления
+    set:
+      grounding_lamp: green
+    transition_sec: 1.0
+
+  - at: 9
+    note: Шаг 2 — открытие крышки люка-лаза
+    set:
+      hatch_cover: open
+    transition_sec: 1.2
+
+  - at: 15
+    note: Шаг 3 — труба подводится над горловиной
+    set:
+      pipe_position: over_hatch
+    transition_sec: 1.5
+
+  - at: 22
+    note: Шаг 4 — труба опускается до упора крышки
+    set:
+      pipe_position: seated
+    transition_sec: 1.2
+
+  - at: 29
+    note: Шаг 5 — груз механизма прижатия в положение «прижато»
+    set:
+      clamp_weight: pressed
+    transition_sec: 1.0
+
+  - at: 36
+    note: Шаг 6 — опускание трубы лебёдкой до дна, операция долгая
+    set:
+      pipe_position: bottom
+    transition_sec: 2.5
+
+  - at: 46
+    note: Шаг 7 — доклад в операторную
+    voice: ready_report
+
+expected:
+  - step: grounding
+    kind: MATCH
+    reason: step_completed
+  - step: hatch
+    kind: MATCH
+    reason: step_completed
+  - step: pipe_over
+    kind: MATCH
+    reason: step_completed
+  - step: pipe_seated
+    kind: MATCH
+    reason: step_completed
+  - step: clamp
+    kind: MATCH
+    reason: step_completed
+  - step: pipe_bottom
+    kind: MATCH
+    reason: step_completed
+  - step: report
+    kind: MATCH
+    reason: step_completed

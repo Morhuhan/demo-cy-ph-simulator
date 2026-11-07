@@ -1,0 +1,214 @@
+{
+  "$defs": {
+    "BBox": {
+      "additionalProperties": false,
+      "description": "Ограничивающий прямоугольник в нормализованных координатах кадра [0..1].",
+      "properties": {
+        "x": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y",
+          "type": "number"
+        },
+        "w": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "W",
+          "type": "number"
+        },
+        "h": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "H",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "w",
+        "h"
+      ],
+      "title": "BBox",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Наблюдение CV. Это граница ответственности с командой компьютерного зрения.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "description": "Версия контракта. Мажорная часть — признак совместимости.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Уникальный идентификатор сообщения",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "ts": {
+      "description": "Момент формирования сообщения, UTC",
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "source": {
+      "description": "Идентификатор источника: 'cv-emulator', 'cv-yolo-v1' и т.п.",
+      "examples": [
+        "cv-emulator"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "camera_id": {
+      "description": "Идентификатор камеры",
+      "examples": [
+        "chest-01"
+      ],
+      "title": "Camera Id",
+      "type": "string"
+    },
+    "post_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Номер поста налива, если распознан по табличке (например 'С-4')",
+      "examples": [
+        "С-4"
+      ],
+      "title": "Post Id"
+    },
+    "frame_ts": {
+      "description": "Время кадра, по которому сделано наблюдение. Именно от него считается задержка из п. 6.2 ТЗ, а не от момента отправки.",
+      "format": "date-time",
+      "title": "Frame Ts",
+      "type": "string"
+    },
+    "variable": {
+      "description": "Наблюдаемая переменная состояния. Перечисление порождено из configs/sop/kft-01.yaml, секция observables.",
+      "examples": [
+        "pipe_position"
+      ],
+      "title": "Variable",
+      "type": "string",
+      "enum": [
+        "clamp_weight",
+        "grounding_lamp",
+        "hatch_cover",
+        "pipe_position"
+      ]
+    },
+    "value": {
+      "default": null,
+      "description": "Значение переменной; null при unclear=true. Допустимые значения зависят от переменной — таблица соответствия в docs/contracts.md.",
+      "examples": [
+        "seated"
+      ],
+      "title": "Value",
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "bottom",
+        "closed",
+        "green",
+        "off",
+        "open",
+        "over_hatch",
+        "pressed",
+        "released",
+        "seated",
+        "stowed",
+        null
+      ]
+    },
+    "confidence": {
+      "description": "Уверенность модели в значении. При unclear=true трактуется как 0.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "unclear": {
+      "default": false,
+      "description": "Признак «не разобрал»: объект перекрыт, засветка, вне кадра. Это штатная ситуация, а не ошибка — движок отвечает вердиктом UNCLEAR.",
+      "title": "Unclear",
+      "type": "boolean"
+    },
+    "bbox": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BBox"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Где в кадре найден объект. Опционально, для отладки и разметки."
+    }
+  },
+  "required": [
+    "source",
+    "camera_id",
+    "variable",
+    "confidence"
+  ],
+  "title": "observation",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-observables": {
+    "grounding_lamp": {
+      "title": "Лампа прибора заземления",
+      "description": "Сигнальная лампа на приборе заземления. Самый надёжный визуальный признак во всём сценарии — яркий источник света, различим при любом освещении.",
+      "initial": "off",
+      "values": {
+        "off": "не горит",
+        "green": "горит зелёным"
+      }
+    },
+    "hatch_cover": {
+      "title": "Крышка люка-лаза",
+      "description": "Крышка люка-лаза вагон-цистерны в закрытом или откинутом положении.",
+      "initial": "closed",
+      "values": {
+        "closed": "закрыта",
+        "open": "открыта"
+      }
+    },
+    "pipe_position": {
+      "title": "Труба телескопическая наливная",
+      "description": "Положение наливной трубы. Внимание CV-команде: over_hatch и seated визуально близки — различие в нескольких сантиметрах высоты. Это самое трудное место сценария, здесь ожидаются низкая уверенность и дребезг.",
+      "initial": "stowed",
+      "values": {
+        "stowed": "в исходном положении",
+        "over_hatch": "над горловиной",
+        "seated": "опущена до упора крышки в горловину",
+        "bottom": "опущена до дна цистерны"
+      }
+    },
+    "clamp_weight": {
+      "title": "Груз механизма прижатия",
+      "description": "Положение груза механизма прижатия крышки к горловине цистерны.",
+      "initial": "released",
+      "values": {
+        "released": "отжат",
+        "pressed": "прижат"
+      }
+    }
+  }
+}

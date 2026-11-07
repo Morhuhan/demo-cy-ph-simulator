@@ -1,0 +1,48 @@
+# Стенд СИЗ-01 одним контейнером — для подключения CV-модуля.
+#
+#     docker compose -f docker-compose.stand.yml up --build
+#     открыть http://localhost:8080/check
+#
+# Внутри тот же run_local.py: все сервисы в одном процессе, шина в памяти.
+# Эмулятор выключен, стенд ждёт CV-модуль на ws://127.0.0.1:8080/cv?stand=demo.
+#
+# Сам CV-модуль запускается не в контейнере, а рядом, на машине: ему нужны
+# камера и видеокарта, а пробросить их в Docker под Windows и macOS нельзя.
+# Порядок запуска значения не имеет — общий ключ занятия задан ниже.
+#
+# Подробно — docs/stand-docker.md.
+
+name: kft-stand
+
+services:
+  stand:
+    build: .
+    image: kft01-stand:latest
+    entrypoint: ["python", "run_local.py", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      KFT_CONFIG: configs/app-ppe-live.yaml
+      # Общий ключ: браузер и CV-модуль попадают в одно занятие.
+      KFT_STAND_KEY: demo
+      # Распознавание голосовых команд через Hugging Face. Токен берётся из
+      # файла .env рядом с этим файлом; без него команды остаются кнопками.
+      HF_TOKEN: ${HF_TOKEN:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: Europe/Moscow
+    ports:
+      # Только на этой машине: у стенда нет авторизации. Если CV-модуль
+      # работает на другой машине, убрать 127.0.0.1: и открыть порт.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Пороги и СОП правятся снаружи, без пересборки образа.
+      - ./configs:/app/configs:ro
+      - stand-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/cv/status', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  stand-data:

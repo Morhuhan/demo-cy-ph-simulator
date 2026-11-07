@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "ServiceStatus": {
+      "enum": [
+        "NO_DATA",
+        "AVAILABLE"
+      ],
+      "title": "ServiceStatus",
+      "type": "string"
+    }
+  },
+  "description": "Служебное сообщение CV-модуля о собственном состоянии, сокет /cv.",
+  "properties": {
+    "camera_id": {
+      "minLength": 1,
+      "title": "Camera Id",
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "title": "Timestamp",
+      "type": "string"
+    },
+    "event_type": {
+      "const": "cv_service",
+      "enum": [
+        "cv_service"
+      ],
+      "title": "Event Type",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ServiceStatus"
+    },
+    "reason": {
+      "examples": [
+        "stream_lost",
+        "stream_restored"
+      ],
+      "title": "Reason",
+      "type": "string"
+    }
+  },
+  "required": [
+    "camera_id",
+    "timestamp",
+    "event_type",
+    "status",
+    "reason"
+  ],
+  "title": "cv-service-event",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Сцена — отладка</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #ddd; font: 13px Segoe UI, sans-serif; }
+  #view { position: absolute; inset: 0 0 40px 0; }
+  #bar { position: absolute; left: 0; right: 0; bottom: 0; height: 40px; display: flex; gap: 6px; align-items: center; padding: 0 8px; }
+  button { background: #222; color: #ddd; border: 1px solid #444; padding: 5px 9px; cursor: pointer; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="view"></div>
+<div id="bar"></div>
+<script type="module">
+import { createScene } from './scene3d.js';
+const s = await createScene(document.getElementById('view'), 'models/');
+window.S3 = s;
+const bar = document.getElementById('bar');
+const btn = (t, f) => { const b = document.createElement('button'); b.textContent = t; b.onclick = f; bar.appendChild(b); };
+for (const p of Object.keys(s.parts)) btn(p, () => s.focus(p));
+btn('ошибка: люк', () => s.focus('hatch', 0xff3b3b));
+btn('сброс', () => { s.anim.reset(); s.clear(); s.view('overview'); });
+for (const a of ['grounding', 'hatch', 'install', 'clamp', 'bottom']) btn('▶ ' + a, () => s.anim[a]());
+document.title = 'ready';
+</script>
+</body>
+</html>

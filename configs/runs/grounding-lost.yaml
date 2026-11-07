@@ -1,0 +1,59 @@
+# Нарушение инварианта: заземление пропало посреди сценария.
+#
+# Заземление должно держаться до конца работ, а не только на первом шаге.
+# Без инварианта движок принял бы «лампа погасла» за обычную смену состояния
+# и промолчал — это ровно тот случай, ради которого инварианты и заведены.
+
+id: grounding-lost
+title: Потеря заземления посреди сценария
+scenario: kft-01
+description: >-
+  Первые четыре шага выполнены правильно, после чего пропадает сигнал
+  заземления. Ожидается критическое предупреждение с остановкой.
+duration_sec: 36
+
+noise:
+  confidence_mean: 0.88
+  confidence_jitter: 0.06
+  flicker_prob: 0.02
+  unclear_prob: 0.01
+
+timeline:
+  - at: 3
+    set:
+      grounding_lamp: green
+    transition_sec: 1.0
+
+  - at: 9
+    set:
+      hatch_cover: open
+    transition_sec: 1.2
+
+  - at: 15
+    set:
+      pipe_position: over_hatch
+    transition_sec: 1.5
+
+  - at: 22
+    set:
+      pipe_position: seated
+    transition_sec: 1.2
+
+  - at: 28
+    note: Заземляющий зажим соскочил — лампа погасла
+    set:
+      grounding_lamp: "off"
+    transition_sec: 0.6
+
+expected:
+  - step: grounding
+    kind: MATCH
+  - step: hatch
+    kind: MATCH
+  - step: pipe_over
+    kind: MATCH
+  - step: pipe_seated
+    kind: MATCH
+  - step: grounding
+    kind: MISMATCH
+    reason: unexpected_state

@@ -1,0 +1,48 @@
+# Главный демонстрационный кейс: каска не надета.
+#
+# Система не ждёт молча и не пропускает сотрудника дальше: по истечении
+# сторожевого таймера объявляется нарушение с указанием последствий.
+# После того как каска надета, проверка проходит штатно.
+
+id: ppe-no-helmet
+title: Нарушение — каска не надета
+scenario: ppe-01
+description: >-
+  Сотрудник предъявляет себя без защитной каски. Через 15 секунд система
+  объявляет нарушение и последствия, затем сотрудник надевает каску
+  и проходит проверку.
+duration_sec: 36
+
+noise:
+  confidence_mean: 0.90
+  confidence_jitter: 0.05
+  flicker_prob: 0.02
+  unclear_prob: 0.01
+
+timeline:
+  - at: 1
+    note: Сотрудник в кадре, защитной каски нет
+
+  - at: 16
+    note: Сработал сторожевой таймер — объявлено нарушение и его последствия
+
+  - at: 21
+    note: Сотрудник надел каску и предъявил повторно
+    set:
+      helmet: "on"
+    transition_sec: 1.0
+
+  - at: 29
+    note: Доклад о готовности к работе
+    voice: ready_report
+
+expected:
+  - step: helmet_check
+    kind: TIMEOUT
+    reason: step_timeout
+  - step: helmet_check
+    kind: MATCH
+    reason: step_completed
+  - step: ready_report
+    kind: MATCH
+    reason: step_completed

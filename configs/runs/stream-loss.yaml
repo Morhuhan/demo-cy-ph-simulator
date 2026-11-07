@@ -1,0 +1,78 @@
+# Отказ на стороне CV: пропал видеопоток посреди сценария.
+#
+# Система обязана сообщить о потере сигнала, приостановить оценку и не
+# трактовать молчание источника как ошибку оператора. После восстановления
+# сценарий продолжается с того же места.
+
+id: stream-loss
+title: Обрыв видеопотока
+scenario: kft-01
+description: >-
+  Потеря сигнала нагрудной камеры на шесть секунд между третьим и четвёртым
+  шагами, затем восстановление и нормальное продолжение.
+duration_sec: 58
+
+noise:
+  confidence_mean: 0.87
+  confidence_jitter: 0.06
+  flicker_prob: 0.02
+  unclear_prob: 0.01
+
+timeline:
+  - at: 3
+    set:
+      grounding_lamp: green
+    transition_sec: 1.0
+
+  - at: 9
+    set:
+      hatch_cover: open
+    transition_sec: 1.2
+
+  - at: 15
+    set:
+      pipe_position: over_hatch
+    transition_sec: 1.5
+
+  - at: 20
+    note: Обрыв соединения с нагрудной камерой
+    stream: lost
+    stream_reason: обрыв соединения с нагрудной камерой
+
+  - at: 26
+    note: Связь восстановлена
+    stream: online
+
+  - at: 30
+    set:
+      pipe_position: seated
+    transition_sec: 1.2
+
+  - at: 37
+    set:
+      clamp_weight: pressed
+    transition_sec: 1.0
+
+  - at: 43
+    set:
+      pipe_position: bottom
+    transition_sec: 2.5
+
+  - at: 52
+    voice: ready_report
+
+expected:
+  - step: grounding
+    kind: MATCH
+  - step: hatch
+    kind: MATCH
+  - step: pipe_over
+    kind: MATCH
+  - step: pipe_seated
+    kind: MATCH
+  - step: clamp
+    kind: MATCH
+  - step: pipe_bottom
+    kind: MATCH
+  - step: report
+    kind: MATCH

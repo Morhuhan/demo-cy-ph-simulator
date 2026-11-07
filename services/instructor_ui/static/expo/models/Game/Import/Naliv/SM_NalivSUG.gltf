@@ -1,0 +1,211 @@
+{
+  "asset" : {
+    "generator" : "UE Viewer (umodel) build 1590",
+    "version" : "2.0"
+  },
+  "scene" : 0,
+  "scenes" : [
+    {
+      "nodes" : [ 0 ]
+    }
+  ],
+  "nodes" : [
+    {
+      "name" : "SM_NalivSUG",
+      "mesh" : 0
+    }
+  ],
+  "materials" : [
+    {
+      "name" : "WorldGridMaterial",
+      "pbrMetallicRoughness" : {
+        "baseColorFactor" : [ 0.3, 0.3, 0.3, 1.0 ],
+        "metallicFactor" : 0.1,
+        "roughnessFactor" : 0.5
+      }
+    },
+    {
+      "name" : "WorldGridMaterial",
+      "pbrMetallicRoughness" : {
+        "baseColorFactor" : [ 0.9, 0.3, 0.3, 1.0 ],
+        "metallicFactor" : 0.1,
+        "roughnessFactor" : 0.5
+      }
+    }
+  ],
+  "meshes" : [
+    {
+      "primitives" : [
+        {
+          "attributes" : {
+            "POSITION" : 1,
+            "NORMAL" : 2,
+            "TANGENT" : 3,
+            "TEXCOORD_0" : 4,
+            "TEXCOORD_1" : 5
+          },
+          "indices" : 0,
+          "material" : 0
+        },
+        {
+          "attributes" : {
+            "POSITION" : 7,
+            "NORMAL" : 8,
+            "TANGENT" : 9,
+            "TEXCOORD_0" : 10,
+            "TEXCOORD_1" : 11
+          },
+          "indices" : 6,
+          "material" : 1
+        }
+      ],
+      "name" : "SM_NalivSUG"
+    }
+  ],
+  "buffers" : [
+    {
+      "uri" : "SM_NalivSUG.bin",
+      "byteLength" : 104344
+    }
+  ],
+  "bufferViews" : [
+    {
+      "buffer" : 0,
+      "byteOffset" : 0,
+      "byteLength" : 624
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 624,
+      "byteLength" : 2328
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 2952,
+      "byteLength" : 2328
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 5280,
+      "byteLength" : 3104
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 8384,
+      "byteLength" : 1552
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 9936,
+      "byteLength" : 1552
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 11488,
+      "byteLength" : 6840
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 18328,
+      "byteLength" : 18432
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 36760,
+      "byteLength" : 18432
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 55192,
+      "byteLength" : 24576
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 79768,
+      "byteLength" : 12288
+    },
+    {
+      "buffer" : 0,
+      "byteOffset" : 92056,
+      "byteLength" : 12288
+    }
+  ],
+  "accessors" : [
+    {
+      "bufferView" : 0,
+      "componentType" : 5123,
+      "count" : 312,
+      "type" : "SCALAR"
+    },
+    {
+      "bufferView" : 1,
+      "min" : [ -0.369375, -0.00062561, -0.36875 ],
+      "max" : [ 0.369375, 0.0193787, 0.36875 ],
+      "componentType" : 5126,
+      "count" : 194,
+      "type" : "VEC3"
+    },
+    {
+      "bufferView" : 2,
+      "componentType" : 5126,
+      "count" : 194,
+      "type" : "VEC3"
+    },
+    {
+      "bufferView" : 3,
+      "componentType" : 5126,
+      "count" : 194,
+      "type" : "VEC4"
+    },
+    {
+      "bufferView" : 4,
+      "componentType" : 5126,
+      "count" : 194,
+      "type" : "VEC2"
+    },
+    {
+      "bufferView" : 5,
+      "componentType" : 5126,
+      "count" : 194,
+      "type" : "VEC2"
+    },
+    {
+      "bufferView" : 6,
+      "componentType" : 5123,
+      "count" : 3420,
+      "type" : "SCALAR"
+    },
+    {
+      "bufferView" : 7,
+      "min" : [ -0.35286, 0.0204391, -0.333429 ],
+      "max" : [ 0.10361, 0.30143, 0.321603 ],
+      "componentType" : 5126,
+      "count" : 1536,
+      "type" : "VEC3"
+    },
+    {
+      "bufferView" : 8,
+      "componentType" : 5126,
+      "count" : 1536,
+      "type" : "VEC3"
+    },
+    {
+      "bufferView" : 9,
+      "componentType" : 5126,
+      "count" : 1536,
+      "type" : "VEC4"
+    },
+    {
+      "bufferView" : 10,
+      "componentType" : 5126,
+      "count" : 1536,
+      "type" : "VEC2"
+    },
+    {
+      "bufferView" : 11,
+      "componentType" : 5126,
+      "count" : 1536,
+      "type" : "VEC2"
+    }
+  ]
+}

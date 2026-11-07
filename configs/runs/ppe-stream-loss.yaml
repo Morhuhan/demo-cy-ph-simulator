@@ -1,0 +1,50 @@
+# Отказ камеры, а не нарушение сотрудника.
+#
+# Молчание источника неоднозначно: его нельзя трактовать как отсутствие каски.
+# Система сообщает о технической проблеме, приостанавливает оценку и
+# продолжает с того же места после восстановления связи.
+
+id: ppe-stream-loss
+title: Обрыв видеопотока
+scenario: ppe-01
+description: >-
+  Связь с нагрудной камерой пропадает до предъявления каски. Ожидается
+  сообщение о потере сигнала, а не оценка действий сотрудника. После восстановления
+  проверка проходит штатно.
+duration_sec: 28
+
+noise:
+  confidence_mean: 0.90
+  confidence_jitter: 0.05
+  flicker_prob: 0.02
+  unclear_prob: 0.01
+
+timeline:
+  - at: 2
+    note: Обрыв соединения с нагрудной камерой
+    stream: lost
+    stream_reason: обрыв соединения с нагрудной камерой
+
+  - at: 8
+    note: Связь восстановлена
+    stream: online
+
+  - at: 10
+    note: Сотрудник предъявляет каску
+    set:
+      helmet: "on"
+    transition_sec: 1.0
+
+  - at: 20
+    note: Доклад о готовности к работе
+    voice: ready_report
+
+# Критерий: обрыв видеопотока не превращается в ошибку оператора. UNCLEAR
+# о потере сигнала в сверку не входит — сравниваются только MATCH/MISMATCH/TIMEOUT.
+expected:
+  - step: helmet_check
+    kind: MATCH
+    reason: step_completed
+  - step: ready_report
+    kind: MATCH
+    reason: step_completed

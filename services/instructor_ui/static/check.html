@@ -1,0 +1,991 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка каски</title>
+<!-- Иконка встроена: тренажёр работает в изолированном контуре, внешних запросов быть не должно. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310131a'/%3E%3Ccircle cx='16' cy='11' r='5' fill='%2335c46a'/%3E%3Crect x='14' y='17' width='4' height='11' rx='1' fill='%234a9eff'/%3E%3C/svg%3E">
+<style>
+  /* Экран показа. На нём ровно то, что нужно человеку перед камерой: видео,
+     состояние каски, что делать сейчас и одна кнопка. Сюжеты, прогоны, пульт
+     и отчёт остались в полном интерфейсе на «/» — отсюда туда не попасть. */
+  :root {
+    color-scheme: dark;
+    --bg: #0f1216;
+    --panel: #151a20;
+    --panel-2: #1b2129;
+    --line: #232a33;
+    --text: #e7eaef;
+    --muted: #8a93a1;
+    --accent: #4a9eff;
+    --ok: #3fbf6f;
+    --warn: #d99a2b;
+    --crit: #e8544c;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+    /* Выделение текста и перетаскивание картинки на показе только мешают. */
+    user-select: none; -webkit-user-select: none;
+  }
+
+  header {
+    flex: none; display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+    padding: 12px 22px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header .spacer { flex: 1; }
+  .ind { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+  .ind i { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); opacity: .5; }
+  .ind.ok i { background: var(--ok); opacity: 1; }
+  .ind.bad i { background: var(--crit); opacity: 1; }
+  .ind.bad { color: #ffb4ae; }
+
+  main {
+    flex: 1; min-height: 0; display: grid; gap: 20px; padding: 18px 22px;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 30%);
+  }
+
+  /* --- видео --- */
+  .video {
+    position: relative; min-height: 0; background: #000; border-radius: 10px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .video img, .video video { max-width: 100%; max-height: 100%; display: block; -webkit-user-drag: none; }
+  .video img[hidden], .video video[hidden] { display: none; }
+  .video .cover {
+    position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center; text-align: center; padding: 24px;
+    background: rgba(10,12,16,.86); font-size: 20px;
+  }
+  .video .cover small { font-size: 14px; color: var(--muted); max-width: 520px; }
+  .video .cover[hidden] { display: none; }
+  .cover-btns { display: flex; gap: 10px; margin-top: 10px; }
+  .cover-btns button { padding: 10px 18px; font-size: 16px; background: var(--panel-2); }
+  .cover-btns button:hover:not(:disabled) { border-color: var(--muted); }
+  /* Итог проверки поверх видео: его должно быть видно с расстояния. */
+  .video .result {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 22px;
+    font-size: 26px; font-weight: 600; text-align: center;
+  }
+  .video .result.ok { background: rgba(35,120,70,.9); }
+  .video .result.bad { background: rgba(160,45,40,.92); }
+  .video .result[hidden] { display: none; }
+
+  /* --- правая колонка --- */
+  aside { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+
+  .helmet {
+    flex: none; display: flex; align-items: center; gap: 16px;
+    padding: 16px 18px; border-radius: 10px; background: var(--panel);
+    border: 2px solid var(--line);
+  }
+  .helmet .icon {
+    flex: none; width: 54px; height: 54px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 30px; font-weight: 700;
+    background: var(--panel-2); color: var(--muted);
+  }
+  .helmet .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .helmet .value { font-size: 24px; font-weight: 600; }
+  .helmet.ok { border-color: var(--ok); }
+  .helmet.ok .icon { background: rgba(63,191,111,.18); color: var(--ok); }
+  .helmet.ok .value { color: var(--ok); }
+  .helmet.bad { border-color: var(--crit); }
+  .helmet.bad .icon { background: rgba(232,84,76,.18); color: var(--crit); }
+  .helmet.bad .value { color: var(--crit); }
+
+  .steps { flex: none; display: flex; gap: 8px; }
+  .steps div {
+    flex: 1; padding: 8px 10px; border-radius: 8px; background: var(--panel);
+    font-size: 13px; color: var(--muted); border: 1px solid var(--line);
+  }
+  .steps b { font-weight: 600; margin-right: 6px; }
+  .steps .active { color: var(--text); border-color: var(--accent); }
+  .steps .done { color: var(--ok); border-color: rgba(63,191,111,.5); }
+  .steps .failed { color: var(--crit); border-color: rgba(232,84,76,.6); }
+
+  .now {
+    flex: none; padding: 16px 18px; border-radius: 10px; background: var(--panel);
+    border-left: 4px solid var(--accent);
+  }
+  .now.ok { border-left-color: var(--ok); }
+  .now.bad { border-left-color: var(--crit); background: rgba(232,84,76,.08); }
+  .now .title { font-size: 22px; font-weight: 600; line-height: 1.3; }
+  .now .sub { margin-top: 6px; font-size: 15px; color: var(--muted); }
+  .now .sub:empty { display: none; }
+  .now .timer { margin-top: 8px; font-size: 14px; color: var(--warn); font-variant-numeric: tabular-nums; }
+  .now .timer:empty { display: none; }
+
+  button {
+    font: inherit; color: var(--text); background: transparent; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  button[hidden] { display: none; }
+  button:disabled { opacity: .45; cursor: default; }
+  .main-btn {
+    flex: none; width: 100%; padding: 20px; font-size: 22px; font-weight: 600;
+    background: var(--accent); border-color: var(--accent); color: #07111e;
+  }
+  .main-btn:hover:not(:disabled) { filter: brightness(1.08); }
+  .ready-btn {
+    flex: none; width: 100%; padding: 14px; font-size: 17px;
+    border-color: var(--ok); color: var(--ok);
+  }
+  .side-btns { flex: none; display: flex; gap: 8px; }
+  .side-btns:not(:has(button:not([hidden]))) { display: none; }
+  .side-btns button { flex: 1; padding: 10px 12px; font-size: 15px; }
+  .side-btns button:hover:not(:disabled) { border-color: var(--muted); }
+  #btn-stop.confirm { border-color: var(--crit); color: var(--crit); }
+
+  .said { flex: none; }
+  .caption { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+  .said .text { font-size: 17px; min-height: 25px; }
+  .mic { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .mic .level { width: 80px; height: 5px; border-radius: 3px; background: var(--panel-2); overflow: hidden; flex: none; }
+  .mic .level > div { height: 100%; width: 0; background: var(--ok); transition: width 80ms linear; }
+  .mic .error { color: var(--crit); }
+  .mic-pick { margin-top: 6px; }
+  .mic-pick select {
+    width: 100%; font: inherit; font-size: 13px; color: var(--text);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
+  }
+  .heard { margin-top: 10px; }
+  .heard .text { font-size: 17px; min-height: 25px; color: var(--accent); }
+  .heard .text:empty::before { content: "—"; color: var(--muted); }
+  .heard .note { font-size: 13px; color: var(--muted); }
+
+  .journal { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  #journal { flex: 1; min-height: 0; overflow: hidden; }
+  .entry { padding: 6px 0 6px 10px; border-left: 3px solid var(--line); margin-bottom: 6px; font-size: 14px; }
+  .entry .t { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }
+  .entry.MATCH { border-left-color: var(--ok); }
+  .entry.MISMATCH, .entry.critical { border-left-color: var(--crit); }
+  .entry.TIMEOUT { border-left-color: var(--warn); }
+  .entry.voice { color: var(--muted); }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    main { grid-template-columns: minmax(0, 1fr); }
+    .video { min-height: 240px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Проверка защитной каски</h1>
+  <div class="spacer"></div>
+  <span class="ind" id="ind-cam"><i></i><span>Камера</span></span>
+  <span class="ind" id="ind-cv"><i></i><span>Распознавание</span></span>
+  <span class="ind" id="ind-mic"><i></i><span>Микрофон</span></span>
+</header>
+
+<main>
+  <section class="video">
+    <img id="video" alt="">
+    <video id="replay" muted playsinline preload="auto" hidden></video>
+    <div class="cover" id="video-cover">
+      <span id="video-cover-title">Подключаюсь к камере…</span>
+      <small id="video-cover-sub"></small>
+      <div class="cover-btns">
+        <button id="btn-cam-retry" hidden>Искать камеру снова</button>
+        <button class="btn-demo" hidden>Тестовый ролик</button>
+      </div>
+    </div>
+    <div class="result" id="result" hidden></div>
+  </section>
+
+  <aside>
+    <div class="helmet" id="helmet">
+      <div class="icon" id="helmet-icon">?</div>
+      <div>
+        <div class="label">Защитная каска</div>
+        <div class="value" id="helmet-value">нет данных</div>
+      </div>
+    </div>
+
+    <div class="steps" id="steps">
+      <div data-step="helmet_check"><b>1</b>Каска</div>
+      <div data-step="ready_report"><b>2</b>Доклад о готовности</div>
+    </div>
+
+    <div class="now" id="now">
+      <div class="title" id="now-title">Загрузка…</div>
+      <div class="sub" id="now-sub"></div>
+      <div class="timer" id="now-timer"></div>
+    </div>
+
+    <button class="main-btn" id="btn-main">Начать проверку</button>
+    <button class="ready-btn" id="btn-ready" hidden>Доложить о готовности</button>
+    <div class="side-btns">
+      <button id="btn-pause" hidden>Пауза</button>
+      <button id="btn-stop" hidden>Остановить</button>
+      <button id="btn-reset" hidden>Сбросить</button>
+      <button class="btn-demo" id="btn-demo-side" hidden>Тестовый ролик</button>
+    </div>
+
+    <div class="said">
+      <div class="caption">Система говорит</div>
+      <div class="text" id="said"></div>
+      <div class="mic">
+        <div class="level"><div id="mic-level"></div></div>
+        <span id="mic-status">микрофон выключен</span>
+      </div>
+      <div class="mic-pick"><select id="mic-device" title="Микрофон"></select></div>
+    </div>
+
+    <div class="heard">
+      <div class="caption">Вы сказали</div>
+      <div class="text" id="mic-heard"></div>
+      <div class="note" id="mic-note"></div>
+    </div>
+
+    <div class="journal">
+      <div class="caption">Журнал</div>
+      <div id="journal"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const MODE = 'demo';
+const SCENARIO_ID = 'ppe-01';
+/* Кадр с рамками отдаёт сам модуль распознавания (run.ps1 запускает его
+   с --preview-port 8081). Адрес можно переопределить: /check?video=<url>. */
+const VIDEO_URL = new URLSearchParams(location.search).get('video')
+  || `http://${location.hostname || '127.0.0.1'}:8081/video`;
+
+let scenario = null, snapshot = null, currentSession = null, lastEntryText = null;
+let cvConnected = false, serverStt = false;
+let helmet = null;          // 'on' | 'off' | null — подтверждённое состояние
+let lastObs = null;         // последнее сырое наблюдение каски
+let busy = false;           // идёт команда стенду — кнопки ждут
+const CV_BASE = new URL(VIDEO_URL).origin;
+let camState = null;        // 'active' | 'searching' | null — модуль не ответил
+let replayShown = false;    // на экране ролик тестовой записи, а не камера
+let replayKey = null;
+let demoLog = null;         // запись для «Тестового ролика»
+
+const fmtTime = (iso) => new Date(iso).toLocaleTimeString('ru-RU', {hour12: false});
+const escapeHtml = (text) => String(text ?? '').replace(/[&<>"]/g,
+  (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+async function api(path, options) {
+  const response = await fetch(path, options);
+  if (response.status === 409) {
+    // Занятие потеряно: стенд перезапустили. Ключ выдаёт страница.
+    reloadOnce();
+    throw new Error(`${path}: занятие не найдено`);
+  }
+  if (!response.ok) throw new Error(`${path}: ${response.status}`);
+  const type = response.headers.get('content-type') || '';
+  return type.includes('json') ? response.json() : response.text();
+}
+let reloading = false;
+function reloadOnce() { if (!reloading) { reloading = true; location.reload(); } }
+const post = (path, body) => api(path, {
+  method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {}),
+});
+
+/* ---------- видео ----------
+   MJPEG от модуля распознавания. Пока его нет — закрывающая плашка с
+   объяснением, и раз в пару секунд пробуем снова. */
+let videoOk = false, videoRetry = null;
+
+function connectVideo() {
+  clearTimeout(videoRetry);
+  videoOk = false;
+  $('video').src = `${VIDEO_URL}${VIDEO_URL.includes('?') ? '&' : '?'}t=${Date.now()}`;
+}
+$('video').onerror = () => {
+  videoOk = false;
+  render();
+  videoRetry = setTimeout(connectVideo, 2000);
+};
+// У потокового JPEG событие загрузки ненадёжно, поэтому смотрим на размер кадра.
+setInterval(() => {
+  const ok = $('video').naturalWidth > 0;
+  if (ok !== videoOk) { videoOk = ok; render(); }
+}, 400);
+
+/* ---------- состояние модуля распознавания ---------- */
+async function pollCv() {
+  let status = null;
+  try { status = await api('/cv/status'); } catch { /* стенд перезапускается */ }
+  const connected = (status?.clients || 0) > 0;
+  if (connected && !cvConnected) connectVideo();  // модуль перезапустили — поток новый
+  cvConnected = connected;
+  // Без камеры модуль к стенду может и не подключиться: слать ему нечего.
+  camState = await cameraState();
+  syncReplay(status);
+  render();
+}
+
+/* Есть ли камера, знает сам модуль. Старый модуль без /camera — null, не мешаем. */
+async function cameraState() {
+  try {
+    const response = await fetch(`${CV_BASE}/camera`, {cache: 'no-store'});
+    if (!response.ok) return null;
+    return (await response.json()).active ? 'active' : 'searching';
+  } catch { return null; }
+}
+
+/* ---------- тестовый ролик ----------
+   Запись проигрывает стенд, ролик подтягиваем к её положению. */
+function syncReplay(status) {
+  const video = $('replay');
+  if (!status?.replay) return;  // отыграла: последний кадр остаётся
+  const key = `${status.replay}:${status.replay_run}`;
+  if (key !== replayKey) {
+    replayKey = key;
+    video.src = `/cv/logs/${status.replay}/video`;
+    video.currentTime = 0;
+    replayShown = true;
+  }
+  if (video.ended) return;
+  if (status.replay_holding) {
+    if (!video.paused) video.pause();
+    return;
+  }
+  const target = status.replay_position_sec || 0;
+  if (Number.isFinite(video.duration) && target < video.duration - 0.3
+      && Math.abs(video.currentTime - target) > 0.6) {
+    video.currentTime = target;
+  }
+  if (video.paused) video.play().catch(() => {});
+}
+
+/* ---------- отрисовка ---------- */
+function stepOf(id) { return snapshot?.steps?.find(s => s.id === id); }
+
+function helmetView() {
+  if (camState === 'searching' && !replayShown) return ['', '?', 'камера не найдена'];
+  if (!cvConnected && !replayShown) return ['', '?', 'распознавание не подключено'];
+  if (snapshot && snapshot.stream_online === false) return ['', '?', 'нет видеосигнала'];
+  const recent = lastObs && Date.now() - lastObs.at < 2000;
+  if (recent && lastObs.unclear) return ['', '?', 'не видно — встаньте в кадр'];
+  if (helmet === 'on') return ['ok', '✓', 'надета'];
+  if (helmet === 'off') return ['bad', '✕', 'не надета'];
+  return ['', '?', 'не видно — встаньте в кадр'];
+}
+
+function setNow(kind, title, sub, timer) {
+  $('now').className = 'now' + (kind ? ' ' + kind : '');
+  $('now-title').textContent = title;
+  $('now-sub').textContent = sub || '';
+  $('now-timer').textContent = timer || '';
+}
+
+function secondsLeft(step) {
+  if (!step?.deadline_ts) return null;
+  return Math.max(0, Math.ceil((new Date(step.deadline_ts) - Date.now()) / 1000));
+}
+
+function render() {
+  // Индикаторы в шапке
+  const camOk = replayShown
+    || (videoOk && cvConnected && camState !== 'searching' && snapshot?.stream_online !== false);
+  $('ind-cam').className = 'ind ' + (camOk ? 'ok' : 'bad');
+  $('ind-cv').className = 'ind ' + (cvConnected || replayShown ? 'ok' : 'bad');
+  $('ind-mic').className = 'ind ' + (micMode === 'live' ? 'ok' : (!serverStt ? 'bad' : ''));
+
+  // Видео: камера или тестовый ролик, поверх — плашка, если показывать нечего
+  $('video').hidden = replayShown;
+  $('replay').hidden = !replayShown;
+  let title = null, sub = '', retry = false;
+  if (replayShown) {
+    title = null;
+  } else if (camState === 'searching') {
+    title = 'Камера не найдена';
+    sub = 'Поиск идёт сам, раз в 2 с.';
+    retry = true;
+  } else if (!cvConnected) {
+    title = 'Распознавание не запущено';
+  } else if (!videoOk) {
+    title = 'Нет изображения';
+    sub = VIDEO_URL;
+  }
+  $('video-cover').hidden = !title;
+  $('video-cover-title').textContent = title || '';
+  $('video-cover-sub').textContent = sub;
+  $('btn-cam-retry').hidden = !retry;
+
+  // Каска
+  const [kind, icon, text] = helmetView();
+  $('helmet').className = 'helmet' + (kind ? ' ' + kind : '');
+  $('helmet-icon').textContent = icon;
+  $('helmet-value').textContent = text;
+
+  // Шаги
+  document.querySelectorAll('#steps [data-step]').forEach(el => {
+    const step = stepOf(el.dataset.step);
+    const live = snapshot && (snapshot.state === 'running' || snapshot.state === 'paused'
+                              || snapshot.state === 'finished');
+    let status = live ? (step?.status || 'pending') : 'pending';
+    if (status === 'active' && step?.last_verdict === 'TIMEOUT') status = 'failed';
+    el.className = status;
+  });
+
+  renderAction();
+}
+
+function renderAction() {
+  const state = snapshot?.state || 'idle';
+  const running = state === 'running' || state === 'paused';
+  const main = $('btn-main'), ready = $('btn-ready');
+  const result = $('result');
+
+  // Какие кнопки есть в каком состоянии. Лишних на экране нет: в каждый
+  // момент видно только то, что сейчас имеет смысл нажать.
+  //   не начата          — «Начать проверку»
+  //   идёт               — «Пауза», «Остановить»
+  //   на паузе           — «Продолжить», «Остановить»
+  //   завершена/прервана — «Проверить ещё раз», «Сбросить»
+  main.hidden = state === 'running';
+  $('btn-pause').hidden = state !== 'running';
+  $('btn-stop').hidden = !running;
+  $('btn-reset').hidden = !(state === 'finished' || state === 'aborted');
+  ready.hidden = true;
+  result.hidden = true;
+  const liveReady = cvConnected && camState !== 'searching';
+  main.disabled = busy || (state !== 'paused' && !liveReady);
+  document.querySelectorAll('.btn-demo').forEach(b => { b.disabled = busy; });
+  $('btn-demo-side').hidden = !demoLog || running;
+  document.querySelector('.cover-btns .btn-demo').hidden = !demoLog;
+
+  if (!running) resetStopConfirm();
+
+  if (state === 'finished') {
+    const passed = stepOf('helmet_check')?.status === 'done';
+    const errors = snapshot.errors_count || 0;
+    result.hidden = false;
+    result.className = 'result ' + (passed ? 'ok' : 'bad');
+    result.textContent = passed ? 'Допуск к работе разрешён' : 'Допуск к работе запрещён';
+    setNow(passed ? 'ok' : 'bad',
+      passed ? 'Проверка пройдена' : 'Проверка не пройдена',
+      errors ? `Нарушений за проверку: ${errors}. Подробности — в журнале ниже.`
+             : 'Каска была надета, доклад о готовности принят.');
+    main.textContent = 'Проверить ещё раз';
+    return;
+  }
+
+  if (state === 'aborted') {
+    setNow('', 'Проверка остановлена',
+      'Нажмите «Проверить ещё раз», чтобы начать сначала, или «Сбросить», чтобы очистить экран.');
+    main.textContent = 'Проверить ещё раз';
+    return;
+  }
+
+  if (state === 'paused') {
+    main.textContent = busy ? 'Продолжаю…' : 'Продолжить';
+    setNow('', 'Проверка на паузе',
+      'Время шага не идёт, микрофон выключен. Нажмите «Продолжить», чтобы вернуться к проверке.');
+    return;
+  }
+
+  if (!running) {
+    main.textContent = busy ? 'Запускаю…' : 'Начать проверку';
+    if (camState === 'searching') {
+      setNow('bad', 'Камера не найдена', 'Подключите камеру или запустите тестовый ролик.');
+    } else if (!cvConnected) {
+      setNow('bad', 'Ждём модуль распознавания',
+        'Кнопка станет доступна, когда распознавание подключится к стенду.');
+    } else {
+      setNow('', 'Встаньте перед камерой',
+        'Когда будете готовы, нажмите «Начать проверку». Дальше система ведёт голосом.');
+    }
+    return;
+  }
+
+  const current = snapshot.current_step_id;
+  const step = stepOf(current);
+  if (snapshot.blocked_message) {
+    setNow('bad', 'Внимание', snapshot.blocked_message);
+  } else if (current === 'helmet_check') {
+    if (step?.last_verdict === 'TIMEOUT' || step?.last_verdict === 'MISMATCH') {
+      setNow('bad', 'Каска не обнаружена — допуск запрещён',
+        'Наденьте каску и посмотрите в камеру. Проверка продолжается.');
+    } else {
+      const left = secondsLeft(step);
+      setNow('', 'Наденьте каску и посмотрите в камеру',
+        'Голова должна целиком попадать в кадр.',
+        left !== null ? `Осталось ${left} с` : '');
+    }
+  } else if (current === 'ready_report') {
+    setNow('ok', 'Каска на месте. Скажите вслух: «К работе готов»',
+      micMode === 'live' ? 'Микрофон слушает. Если голос не распознаётся — нажмите кнопку ниже.'
+                         : 'Микрофон не работает — нажмите кнопку ниже.');
+    ready.hidden = false;
+    ready.disabled = busy;
+  } else {
+    setNow('', step?.title || 'Идёт проверка', '');
+  }
+}
+
+// Отсчёт до конца шага меняется каждую секунду сам по себе.
+setInterval(() => { if (snapshot?.state === 'running') renderAction(); }, 500);
+
+/* ---------- журнал ---------- */
+const JOURNAL_MAX = 8;
+function addEntry(text, ts, cls) {
+  const div = document.createElement('div');
+  div.className = 'entry ' + cls;
+  div.innerHTML = `<div class="t">${fmtTime(ts)}</div><div>${escapeHtml(text)}</div>`;
+  $('journal').prepend(div);
+  while ($('journal').children.length > JOURNAL_MAX) $('journal').lastChild.remove();
+}
+
+function onVerdict(v) {
+  lastEntryText = v.message;
+  addEntry(v.message, v.ts, v.kind + (v.severity === 'critical' ? ' critical' : ''));
+}
+
+function onSpoken(event, replay) {
+  $('said').textContent = event.text;
+  if (event.text !== lastEntryText) {
+    addEntry(event.text, event.ts, 'voice');
+    lastEntryText = event.text;
+  }
+  if (!replay) speak(event);
+}
+
+/* ---------- голос стенда ----------
+   Как в полном интерфейсе: реплики строго по одной, критическая обрывает
+   предыдущую. */
+let audioQueue = [], audioCurrent = null;
+
+function playNext() {
+  const url = audioQueue.shift();
+  if (!url) { audioCurrent = null; return; }
+  audioCurrent = new Audio(url);
+  audioCurrent.onended = playNext;
+  audioCurrent.onerror = playNext;
+  audioCurrent.play().catch(playNext);
+}
+
+function stopSpeaking() {
+  audioQueue = [];
+  if (audioCurrent) { audioCurrent.pause(); audioCurrent = null; }
+  speechSynthesis.cancel();
+}
+
+function speak(event) {
+  const interrupt = event.kind === 'critical' || event.interrupted;
+  if (event.engine === 'browser') {
+    if (interrupt) speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(event.text);
+    utterance.lang = 'ru-RU';
+    speechSynthesis.speak(utterance);
+  } else {
+    if (interrupt) stopSpeaking();
+    audioQueue.push(`/voice/audio/${event.request_id}.wav`);
+    if (!audioCurrent) playNext();
+  }
+}
+
+/* ---------- голос обучаемого ----------
+   Та же схема, что в полном интерфейсе (index.html): речь от тишины отделяет
+   страница, фразу целиком распознаёт стенд. Пока говорит стенд, микрофон глух —
+   иначе он услышал бы свою же команду «доложите о готовности». */
+const MIC = {
+  rate: 16000, startMs: 150, silenceMs: 700, minMs: 350, maxMs: 6000,
+  prerollMs: 300, tailMs: 800, floor: 0.012,
+};
+const INTENT_TITLES = {ready_report: 'доклад о готовности', repeat: 'повтори', help: 'помощь'};
+
+let micMode = null, micRig = null, micBusy = false;
+let standSpokeAt = -Infinity, micHoldUntil = 0;
+
+function standSpeaking() {
+  return Boolean(audioCurrent) || audioQueue.length > 0 || speechSynthesis.speaking;
+}
+
+function micStatus(text, kind, holdMs) {
+  const el = $('mic-status');
+  if (el.textContent !== text) el.textContent = text;
+  const cls = kind || '';
+  if (el.className !== cls) el.className = cls;
+  micHoldUntil = holdMs ? performance.now() + holdMs : 0;
+}
+
+/* Микрофон выбирается явно. Без deviceId Chrome берёт не обязательно тот,
+   что стоит по умолчанию в Windows, а с несколькими входами легко слушать
+   пустой разъём. Выбор запоминается в этом браузере. */
+const MIC_KEY = 'kft-mic-device';
+function savedMic() {
+  try { return localStorage.getItem(MIC_KEY) || 'default'; } catch { return 'default'; }
+}
+
+async function listMics() {
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  const select = $('mic-device');
+  const mics = (await navigator.mediaDevices.enumerateDevices())
+    .filter(d => d.kind === 'audioinput' && d.deviceId !== 'communications');
+  const chosen = savedMic();
+  select.innerHTML = mics.map(d => `<option value="${escapeHtml(d.deviceId)}">${
+    escapeHtml(d.label || (d.deviceId === 'default' ? 'По умолчанию' : 'Микрофон'))}</option>`).join('');
+  select.value = mics.some(d => d.deviceId === chosen) ? chosen : 'default';
+  select.parentElement.hidden = mics.length < 2;
+}
+
+$('mic-device').onchange = () => {
+  try { localStorage.setItem(MIC_KEY, $('mic-device').value); } catch { /* без памяти */ }
+  if (micRig) { stopMic(); syncMic(); }
+};
+navigator.mediaDevices?.addEventListener?.('devicechange', () => listMics().catch(() => {}));
+
+async function openMic(deviceId) {
+  return navigator.mediaDevices.getUserMedia({
+    audio: {deviceId: {exact: deviceId}, echoCancellation: true, noiseSuppression: true, autoGainControl: true},
+  });
+}
+
+async function startMic() {
+  let stream;
+  try {
+    stream = await openMic(savedMic());
+  } catch (err) {
+    // Выбранный микрофон отключили — берём тот, что по умолчанию.
+    if (err.name !== 'OverconstrainedError' && err.name !== 'NotFoundError') throw err;
+    stream = await openMic('default');
+  }
+  listMics().catch(() => {});
+  const ctx = new AudioContext();
+  const source = ctx.createMediaStreamSource(stream);
+  const node = ctx.createScriptProcessor(4096, 1, 1);
+  const rig = {stream, ctx, node, noise: MIC.floor, state: 'idle',
+               loud: 0, quiet: 0, preroll: [], chunks: [], length: 0};
+  node.onaudioprocess = (e) => onMicBlock(rig, e.inputBuffer.getChannelData(0));
+  source.connect(node);
+  node.connect(ctx.destination);
+  return rig;
+}
+
+function resetMic(rig) {
+  rig.state = 'idle'; rig.loud = 0; rig.quiet = 0; rig.chunks = []; rig.length = 0;
+}
+
+function onMicBlock(rig, samples) {
+  const block = new Float32Array(samples);
+  const rate = rig.ctx.sampleRate;
+  const ms = block.length / rate * 1000;
+  let sum = 0;
+  for (let i = 0; i < block.length; i++) sum += block[i] * block[i];
+  const level = Math.sqrt(sum / block.length);
+  $('mic-level').style.width = Math.min(100, level * 400) + '%';
+
+  const now = performance.now();
+  if (standSpeaking()) standSpokeAt = now;
+  const echo = now - standSpokeAt < MIC.tailMs;
+
+  // Слушаем только идущую проверку. Микрофон и так выключается вне её
+  // (syncMic), это страховка на время, пока он гаснет.
+  if (snapshot?.state !== 'running') { resetMic(rig); return; }
+  if (echo || micBusy) {
+    if (rig.state === 'speech' && echo) micStatus('стенд заговорил — фраза отброшена', null, 1500);
+    resetMic(rig);
+    if (!micBusy && now >= micHoldUntil) micStatus('говорит стенд — микрофон ждёт');
+    return;
+  }
+
+  const loud = level > Math.max(MIC.floor, rig.noise * 3);
+  if (rig.state === 'idle') {
+    if (!loud) rig.noise = rig.noise * 0.95 + level * 0.05;
+    rig.preroll.push(block);
+    while (rig.preroll.length * ms > MIC.prerollMs) rig.preroll.shift();
+    rig.loud = loud ? rig.loud + ms : 0;
+    if (rig.loud >= MIC.startMs) {
+      rig.state = 'speech';
+      rig.chunks = [...rig.preroll];
+      rig.length = rig.chunks.reduce((n, chunk) => n + chunk.length, 0);
+      rig.quiet = 0;
+      micStatus('слышу речь…');
+    } else if (now >= micHoldUntil) {
+      micStatus('микрофон слушает — говорите');
+    }
+    return;
+  }
+
+  rig.chunks.push(block);
+  rig.length += block.length;
+  rig.quiet = loud ? 0 : rig.quiet + ms;
+  const durationMs = rig.length / rate * 1000;
+  if (rig.quiet >= MIC.silenceMs || durationMs >= MIC.maxMs) {
+    const chunks = rig.chunks;
+    const speechMs = durationMs - rig.quiet;
+    resetMic(rig);
+    if (speechMs >= MIC.minMs) sendPhrase(chunks, rate);
+  }
+}
+
+function toWav(chunks, rate) {
+  const total = chunks.reduce((n, chunk) => n + chunk.length, 0);
+  const merged = new Float32Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.length; }
+  const ratio = rate / MIC.rate;
+  const length = Math.floor(total / ratio);
+  const pcm = new Int16Array(length);
+  for (let i = 0; i < length; i++) {
+    const from = Math.floor(i * ratio);
+    const to = Math.min(total, Math.floor((i + 1) * ratio));
+    let acc = 0;
+    for (let j = from; j < to; j++) acc += merged[j];
+    const value = acc / Math.max(1, to - from);
+    pcm[i] = Math.max(-1, Math.min(1, value)) * 0x7fff;
+  }
+  const buffer = new ArrayBuffer(44 + pcm.length * 2);
+  const view = new DataView(buffer);
+  const tag = (at, text) => { for (let i = 0; i < text.length; i++) view.setUint8(at + i, text.charCodeAt(i)); };
+  tag(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true); tag(8, 'WAVE');
+  tag(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, MIC.rate, true);
+  view.setUint32(28, MIC.rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  tag(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buffer, 44).set(pcm);
+  return new Blob([buffer], {type: 'audio/wav'});
+}
+
+async function sendPhrase(chunks, rate) {
+  micBusy = true;
+  micStatus('распознаю…');
+  const started = performance.now();
+  try {
+    const query = currentSession ? `?session_id=${encodeURIComponent(currentSession)}` : '';
+    const response = await fetch('/voice/listen' + query, {
+      method: 'POST', headers: {'Content-Type': 'audio/wav'}, body: toWav(chunks, rate),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || `ошибка ${response.status}`);
+    const seconds = ((performance.now() - started) / 1000).toFixed(1);
+    const title = INTENT_TITLES[result.intent];
+    $('mic-heard').textContent = result.transcript ? `«${result.transcript}»` : '(ничего не разобрал)';
+    $('mic-note').textContent = title
+      ? `команда: ${title} (распознано за ${seconds} с)`
+      : `это не команда (распознано за ${seconds} с)`;
+    if (micRig) micStatus('микрофон слушает — говорите');
+  } catch (err) {
+    micStatus(`распознавание не удалось: ${err.message}`, 'error', 5000);
+  } finally {
+    micBusy = false;
+  }
+}
+
+/* Микрофон работает только во время идущей проверки: включается, когда
+   занятие переходит в «идёт», и выключается на паузе, остановке, сбросе и по
+   завершении — тогда и значок микрофона в браузере гаснет. Звук браузер даёт
+   после действия пользователя; нажатие «Начать проверку» им и служит, а
+   run.ps1 вдобавок запускает Chrome с --autoplay-policy=no-user-gesture-required. */
+let micStarting = false;
+
+function micIdleText() {
+  if (!serverStt) return 'распознавание речи не настроено: нет HF_TOKEN в .env стенда';
+  return 'микрофон включится, когда начнётся проверка';
+}
+
+function syncMic() {
+  if (snapshot?.state === 'running') ensureMic();
+  else stopMic();
+}
+
+async function ensureMic() {
+  if (micRig) { resumeMic(); return; }
+  if (micStarting || !serverStt) return;
+  if (!navigator.mediaDevices) {
+    micStatus('микрофон доступен только по адресу 127.0.0.1', 'error');
+    return;
+  }
+  micStarting = true;
+  try {
+    micRig = await startMic();
+    micMode = 'live';
+    // Пока просили доступ, проверку могли уже остановить.
+    if (snapshot?.state !== 'running') stopMic();
+    else resumeMic();
+  } catch (err) {
+    micStatus(`микрофон недоступен: ${err.message}`, 'error');
+  } finally {
+    micStarting = false;
+  }
+  render();
+}
+
+function stopMic() {
+  if (micRig) {
+    micRig.node.disconnect();
+    micRig.stream.getTracks().forEach(track => track.stop());
+    micRig.ctx.close();
+    micRig = null;
+  }
+  micMode = null;
+  $('mic-level').style.width = '0';
+  if (!micBusy) micStatus(micIdleText(), serverStt ? null : 'error');
+}
+
+function resumeMic() {
+  if (!micRig) return;
+  if (micRig.ctx.state === 'suspended') {
+    micRig.ctx.resume().then(() => micStatus('микрофон слушает — говорите')).catch(() => {});
+    micStatus('нажмите в любом месте страницы, чтобы включить микрофон', 'error');
+    return;
+  }
+  micStatus('микрофон слушает — говорите');
+}
+document.addEventListener('pointerdown', () => { if (micRig) resumeMic(); });
+
+/* ---------- кнопки ----------
+   Каждое действие гасит голос стенда сразу, не дожидаясь ответа сервера:
+   на остановку или паузу реплика не должна договариваться. Пока запрос
+   идёт, кнопки второй раз не нажимаются. */
+
+async function act(fn) {
+  if (busy) return;
+  busy = true;
+  render();
+  try {
+    await fn();
+  } catch (err) {
+    setNow('bad', 'Команда не прошла', `${err.message}. Попробуйте ещё раз.`);
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+function clearScreen() {
+  stopSpeaking();
+  replayShown = false;
+  $('replay').pause();
+  $('journal').innerHTML = '';
+  $('said').textContent = '';
+  $('mic-heard').textContent = '';
+  $('mic-note').textContent = '';
+  lastEntryText = null;
+}
+
+$('btn-main').onclick = () => act(async () => {
+  if (snapshot?.state === 'paused') {
+    await post('/session/resume');
+    return;
+  }
+  clearScreen();
+  // Сброс перед стартом: новое занятие начинается с чистого листа, из какого
+  // бы состояния его ни запускали — остановленного или завершённого.
+  await post('/session/reset');
+  await post('/session/start', {mode: MODE, trainee_name: null});
+});
+
+$('btn-pause').onclick = () => act(async () => {
+  stopSpeaking();
+  await post('/session/pause');
+});
+
+$('btn-reset').onclick = () => act(async () => {
+  clearScreen();
+  await post('/session/reset');
+});
+
+$('btn-cam-retry').onclick = () => act(async () => {
+  const response = await fetch(`${CV_BASE}/camera/retry`, {method: 'POST'});
+  if (!response.ok) throw new Error(`модуль ответил ${response.status}`);
+});
+
+document.querySelectorAll('.btn-demo').forEach(button => {
+  button.onclick = () => act(async () => {
+    clearScreen();
+    await post('/session/reset');
+    await post('/session/start', {mode: MODE, trainee_name: null});
+    await post(`/cv/logs/${demoLog}/play`);
+  });
+});
+
+$('btn-ready').onclick = () => act(() => post('/emulator/voice', {intent: 'ready_report'}));
+
+/* Остановка — в два нажатия: случайный клик не должен обрывать проверку. */
+let stopConfirmTimer = null;
+function resetStopConfirm() {
+  clearTimeout(stopConfirmTimer);
+  $('btn-stop').classList.remove('confirm');
+  $('btn-stop').textContent = 'Остановить';
+}
+$('btn-stop').onclick = () => {
+  const button = $('btn-stop');
+  if (!button.classList.contains('confirm')) {
+    button.classList.add('confirm');
+    button.textContent = 'Точно остановить?';
+    stopConfirmTimer = setTimeout(resetStopConfirm, 3000);
+    return;
+  }
+  resetStopConfirm();
+  act(async () => {
+    stopSpeaking();
+    await post('/session/stop');
+  });
+};
+
+// Правый клик и перетаскивание на экране показа ничего полезного не дают.
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+document.addEventListener('dragstart', (e) => e.preventDefault());
+
+/* ---------- подключение ---------- */
+function onSnapshot(s) {
+  if (currentSession && s.session_id !== currentSession) $('journal').innerHTML = '';
+  currentSession = s.session_id;
+  snapshot = s;
+  const observed = s.observed_state?.helmet;
+  if (observed !== undefined) helmet = observed;
+  syncMic();
+  render();
+}
+
+function connect() {
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  const socket = new WebSocket(`${protocol}://${location.host}/ws`);
+  socket.onmessage = (message) => {
+    const {type, payload, replay} = JSON.parse(message.data);
+    if (type === 'snapshot') onSnapshot(payload);
+    else if (type === 'verdict') onVerdict(payload);
+    else if (type === 'spoken') onSpoken(payload, replay === true);
+    else if (type === 'observation' && payload.variable === 'helmet') {
+      lastObs = {unclear: payload.unclear, at: Date.now()};
+    } else if (type === 'state' && payload.variable === 'helmet') {
+      helmet = payload.quality === 'confirmed' ? payload.value : null;
+      render();
+    }
+  };
+  socket.onclose = () => setTimeout(connect, 1500);
+}
+// «Не видно» зависит от времени последнего наблюдения — перерисовываем и без событий.
+setInterval(() => render(), 1000);
+
+/* Экран показа — только про каску. Если на стенде выбран другой сюжет
+   (например, его переключили в полном интерфейсе), возвращаем свой. */
+async function ensureScenario() {
+  const list = await api('/scenarios');
+  const ours = list.find(s => s.id === SCENARIO_ID);
+  if (ours && !ours.active) await post(`/scenarios/${SCENARIO_ID}`);
+  scenario = await api('/scenario');
+  try { demoLog = (await api('/cv/logs'))[0]?.id || null; } catch { demoLog = null; }
+}
+
+(async () => {
+  connectVideo();
+  try { await ensureScenario(); } catch { /* стенд поднимается — снимок придёт по сокету */ }
+  connect();
+  await pollCv();
+  setInterval(pollCv, 1000);
+  try {
+    serverStt = (await api('/voice/state')).server_stt;
+  } catch { serverStt = false; }
+  listMics().catch(() => {});
+  syncMic();
+  render();
+})();
+</script>
+</body>
+</html>

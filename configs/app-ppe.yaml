@@ -1,0 +1,142 @@
+# Конфигурация демонстрационного стенда СИЗ-01 — проверка средств защиты.
+#
+# Запуск:
+#     KFT_CONFIG=configs/app-ppe.yaml python run_local.py
+#
+# Отличается от configs/app.yaml сценарием, профилем сглаживания под одну
+# переменную и отдельной базой, чтобы демонстрационные сеансы не смешивались
+# с журналом КФТ-01.
+
+sop_path: configs/sop/ppe-01.yaml
+
+# ---------------------------------------------------------------------------
+# Сглаживание.
+#
+# Каска — признак заметно более устойчивый, чем положение трубы в КФТ-01:
+# крупный объект контрастной формы на голове человека. Окно поэтому короче,
+# и вся проверка укладывается в заметно меньшую задержку.
+#
+# unclear_after_sec держится небольшим сознательно: в этом сценарии
+# неопределённость означает, что сотрудник не попал в кадр, и сказать ему об
+# этом надо быстро — в отличие от налива, где долгий физический переход сам
+# по себе выглядит как неопределённость.
+# ---------------------------------------------------------------------------
+smoothing:
+  defaults:
+    confirm_window_sec: 0.7
+    min_confidence: 0.55
+    min_agreement: 0.7
+    min_hold_sec: 0.4
+    stale_after_sec: 4.0
+    unclear_after_sec: 2.5
+    unclear_report_sec: 4.0
+    min_observations: 5
+
+  variables:
+    helmet:
+      confirm_window_sec: 0.7
+      min_confidence: 0.6
+      min_agreement: 0.75
+      min_hold_sec: 0.4
+      stale_after_sec: 4.0
+      unclear_after_sec: 2.5
+      unclear_report_sec: 4.0
+      min_observations: 5
+
+engine:
+  default_mode: training
+  unclear_cooldown_sec: 6.0
+  low_confidence_grace_sec: 1.5
+  stream_lost_after_sec: 4.0
+  announce_unclear_in_testing: false
+
+voice:
+  engine: auto
+  silero:
+    model_id: v4_ru
+    speaker: eugene
+    sample_rate: 24000
+  # Команды обучаемого распознаёт Whisper на серверах Hugging Face: фраза
+  # уходит наружу, токен берётся из переменной HF_TOKEN (файл .env стенда).
+  # Без токена стенд работает, а команды остаются кнопками инструктора.
+  stt:
+    engine: hf
+    hf_model: openai/whisper-large-v3-turbo
+    language: ru
+  cache_dir: data/tts-cache
+  warmup: true
+  queue_max: 8
+
+storage:
+  url: sqlite+aiosqlite:///data/ppe01.sqlite3
+  store_observations: false
+  retention:
+    sessions_days: 90
+    observations_days: 7
+    video_days: 30
+
+privacy:
+  consent_required: true
+  blur_faces_required: true
+  store_raw_video: true
+  video_ring_buffer_sec: 300
+
+# Бюджет задержки: окно сглаживания короче, чем в КФТ-01, поэтому запас
+# по нормативу 2 с здесь больше.
+latency_budget:
+  cv_ms: 500
+  smoothing_ms: 700
+  engine_ms: 100
+  voice_ms: 300
+  total_ms: 2000
+
+# Идентификатор камеры совпадает с config.yaml CV-модуля: при переходе
+# с эмулятора на живой поток журнал остаётся сопоставимым.
+emulator:
+  enabled: true
+  runs_dir: configs/runs
+  default_run: null
+  rate_hz: 15
+  camera_id: hmd-01
+
+# ---------------------------------------------------------------------------
+# Приём событий реального CV-модуля. Для сухого прогона на демо-данных
+# выключен: стенд работает от эмулятора и внешних зависимостей не имеет.
+# Включается на интеграции — см. docs/integration-cv.md.
+# ---------------------------------------------------------------------------
+cv_ingress:
+  # Живой приём по WebSocket выключен: модуль распознавания к стенду не
+  # подключён. Записи реальной съёмки это не затрагивает — они проигрываются
+  # тем же путём и включаются сами, когда выбран сюжет с ними.
+  enabled: false
+  logs_dir: configs/cv-logs
+  path: /cv
+  republish_hz: 12
+  # Рамка приходит так, как её отдаёт CV-модуль: пиксели исходного кадра,
+  # два угла (x1, y1, x2, y2). В доли кадра она переводится по frame_width и
+  # frame_height из события; без них рамка теряется, а выбор проверяемого
+  # всё равно работает — люди в одном кадре сравниваются в пикселях.
+  bbox_format: xyxy
+  bbox_normalized: false
+  objects:
+    helmet: helmet
+
+# ---------------------------------------------------------------------------
+# Разбор занятия связным текстом.
+#
+# Формируется после занятия по сохранённым вердиктам. Модель пересказывает
+# уже вынесенные оценки и своих не выносит — решения остаются за движком,
+# иначе приёмочная метрика точности потеряла бы смысл.
+#
+# engine: auto — модель, если задан ключ, иначе шаблон. Шаблон работает
+# без сети и ключей, поэтому в изолированном контуре разбор будет всегда.
+# Ключ в конфигурации не хранится: здесь только имя переменной окружения.
+# ---------------------------------------------------------------------------
+debrief:
+  engine: auto
+  base_url: https://gptunnel.ru/v1
+  model: gpt-5.6-sol
+  api_key_env: AI_API_KEY
+  use_bearer: false
+  timeout_sec: 60
+  max_tokens: 700

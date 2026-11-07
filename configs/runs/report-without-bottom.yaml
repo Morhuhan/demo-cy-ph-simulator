@@ -1,0 +1,79 @@
+# Доклад о готовности к наливу при неопущенной до дна трубе.
+#
+# По регламенту это самая дорогая ошибка сценария: при наливе жидкость падает
+# с высоты, копится статическое электричество, возможен проскок искры и взрыв
+# в цистерне. Седьмой шаг заблокирован до выполнения пятого и шестого.
+
+id: report-without-bottom
+title: Доклад без опущенной трубы
+scenario: kft-01
+description: >-
+  Оператор доводит сценарий до прижатия крышки, пропускает опускание трубы
+  лебёдкой и докладывает о готовности. Ожидается критическая блокировка
+  седьмого шага.
+duration_sec: 58
+
+noise:
+  confidence_mean: 0.86
+  confidence_jitter: 0.07
+  flicker_prob: 0.03
+  unclear_prob: 0.01
+
+timeline:
+  - at: 3
+    set:
+      grounding_lamp: green
+    transition_sec: 1.0
+
+  - at: 9
+    set:
+      hatch_cover: open
+    transition_sec: 1.2
+
+  - at: 15
+    set:
+      pipe_position: over_hatch
+    transition_sec: 1.5
+
+  - at: 22
+    set:
+      pipe_position: seated
+    transition_sec: 1.2
+
+  - at: 29
+    set:
+      clamp_weight: pressed
+    transition_sec: 1.0
+
+  - at: 35
+    note: Оператор пропускает опускание трубы и докладывает о готовности
+    voice: ready_report
+
+  - at: 44
+    note: Ошибка исправлена — труба опускается лебёдкой до дна
+    set:
+      pipe_position: bottom
+    transition_sec: 2.5
+
+  - at: 53
+    note: Повторный доклад, теперь законный
+    voice: ready_report
+
+expected:
+  - step: grounding
+    kind: MATCH
+  - step: hatch
+    kind: MATCH
+  - step: pipe_over
+    kind: MATCH
+  - step: pipe_seated
+    kind: MATCH
+  - step: clamp
+    kind: MATCH
+  - step: report
+    kind: MISMATCH
+    reason: precondition_violated
+  - step: pipe_bottom
+    kind: MATCH
+  - step: report
+    kind: MATCH

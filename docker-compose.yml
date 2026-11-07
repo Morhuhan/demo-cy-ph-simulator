@@ -1,0 +1,100 @@
+# Поставочная сборка: шесть сервисов и шина, поднимаются одной командой
+# (п. 3.1 вопросника Заказчика).
+#
+#     docker compose up --build
+#     открыть http://localhost:8080
+#
+# Отличие от локального запуска (`python run_local.py`) только в двух вещах:
+# каждый сервис — отдельный процесс, и шина — Redis Streams вместо очередей в
+# памяти. Код сервисов один и тот же.
+
+name: kft01
+
+x-common: &common
+  build: .
+  restart: unless-stopped
+  environment: &common-env
+    REDIS_URL: redis://redis:6379/0
+    KFT_CONFIG: configs/app.yaml
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    TZ: Europe/Moscow
+  volumes:
+    # Конфигурация и СОП пробрасываются снаружи: поправить регламент или пороги
+    # на площадке можно без пересборки образа.
+    - ./configs:/app/configs:ro
+    - kft-data:/app/data
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    # appendonly: журнал вердиктов не должен теряться при перезапуске шины.
+    command: redis-server --appendonly yes --save ""
+    volumes:
+      - kft-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+    restart: unless-stopped
+
+  # Источник наблюдений. В поставке заменяется реальным модулем CV — контракт,
+  # который он обязан соблюдать, лежит в contracts/observation.schema.json.
+  cv-adapter:
+    <<: *common
+    command: ["cv_adapter", "--port", "8000"]
+    expose: ["8000"]
+
+  # Сглаживание сырого потока. HTTP-интерфейса нет — только шина.
+  event-processor:
+    <<: *common
+    command: ["event_processor"]
+
+  # Сценарный движок: сверка со СОП, блокировки, сторожевые таймеры.
+  scenario-engine:
+    <<: *common
+    command: ["scenario_engine"]
+
+  # Голосовой ассистент. Синтезированное аудио отдаётся по HTTP интерфейсу
+  # инструктора: у контейнера нет доступа к звуковой карте хоста.
+  voice-assistant:
+    <<: *common
+    command: ["voice_assistant", "--port", "8000"]
+    expose: ["8000"]
+
+  # Журнал тренировок, отчёты, выгрузка CSV.
+  storage-api:
+    <<: *common
+    command: ["storage_api", "--port", "8000"]
+    expose: ["8000"]
+
+  # Интерфейс инструктора — единственный сервис, смотрящий наружу.
+  instructor-ui:
+    <<: *common
+    command: ["instructor_ui", "--port", "8080"]
+    environment:
+      <<: *common-env
+      # Префиксы проксируются в соседние сервисы, чтобы клиентский код не знал,
+      # собран стенд в один процесс или в шесть.
+      CV_ADAPTER_URL: http://cv-adapter:8000
+      VOICE_URL: http://voice-assistant:8000
+      STORAGE_URL: http://storage-api:8000
+    ports:
+      - "${UI_PORT:-8080}:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      cv-adapter:
+        condition: service_started
+      voice-assistant:
+        condition: service_started
+      storage-api:
+        condition: service_started
+
+volumes:
+  kft-data:
+  kft-redis:

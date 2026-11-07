@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "Priority": {
+      "enum": [
+        "normal",
+        "interrupt"
+      ],
+      "title": "Priority",
+      "type": "string"
+    },
+    "UtteranceKind": {
+      "enum": [
+        "instruction",
+        "confirmation",
+        "warning",
+        "critical",
+        "hint",
+        "report"
+      ],
+      "title": "UtteranceKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Задание голосовому ассистенту.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0",
+      "description": "Версия контракта. Мажорная часть — признак совместимости.",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "description": "Уникальный идентификатор сообщения",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "ts": {
+      "description": "Момент формирования сообщения, UTC",
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "text": {
+      "title": "Text",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/UtteranceKind"
+    },
+    "priority": {
+      "$ref": "#/$defs/Priority",
+      "default": "normal"
+    },
+    "cache_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Ключ постоянной фразы для кэша TTS. Фразы с ключом синтезируются при старте (прогрев) и дальше отдаются мгновенно.",
+      "title": "Cache Key"
+    },
+    "verdict_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Вердикт, породивший реплику",
+      "title": "Verdict Id"
+    },
+    "source_frame_ts": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "ISO-время исходного кадра — чтобы замерить сквозную задержку п. 6.2 ТЗ",
+      "title": "Source Frame Ts"
+    }
+  },
+  "required": [
+    "session_id",
+    "text",
+    "kind"
+  ],
+  "title": "speak-request",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
